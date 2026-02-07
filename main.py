@@ -8,7 +8,6 @@ TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
 SOURCES = [
     'http://feeds.bbci.co.uk/news/world/rss.xml',
-    'https://www.reutersagency.com/feed/',
     'https://www.aljazeera.com/xml/rss/all.xml'
 ]
 
@@ -16,24 +15,29 @@ bot = telebot.TeleBot(TOKEN)
 translator = Translator()
 
 def get_news():
+    print("Yangiliklar tekshirilmoqda...")
     for url in SOURCES:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:1]: # Eng so'nggi 1ta xabarni oladi
+        if feed.entries:
+            entry = feed.entries[0]
             title = entry.title
             link = entry.link
             
-            # Tarjima qilish
-            uz_title = translator.translate(title, dest='uz').text
+            try:
+                uz_title = translator.translate(title, dest='uz').text
+                text = f"📢 **{uz_title}**\n\n🔗 Manba: {link}\n\n✅ @karnayuzb"
+                bot.send_message(CHANNEL_ID, text, parse_mode='Markdown')
+                print(f"Post jo'natildi: {uz_title}")
+            except Exception as e:
+                print(f"Tarjima yoki jo'natishda xato: {e}")
             
-            text = f"📢 **{uz_title}**\n\n🔗 Manba: {link}\n\n✅ @karnayuzb"
-            
-            bot.send_message(CHANNEL_ID, text, parse_mode='Markdown')
-            time.sleep(5) # Telegram bloklamasligi uchun
+            time.sleep(5)
 
 if __name__ == "__main__":
     while True:
         try:
             get_news()
-            time.sleep(1800) # Har 30 daqiqada yangilik qidiradi
-        except:
+            time.sleep(1800) # 30 daqiqa kutish
+        except Exception as e:
+            print(f"Global xato: {e}")
             time.sleep(60)
