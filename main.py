@@ -7,7 +7,7 @@ from googletrans import Translator
 from telebot import types
 
 # SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' # Tokeningiz
+TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' #
 CHANNEL_ID = '@karnayuzb'
 
 SOURCES = {
@@ -23,21 +23,17 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = set() # Takrorlanishga qarshi
+sent_news = set() #
 
 def clean_html(raw_html):
-    """Matn ichidagi HTML teglarni tozalash"""
     cleanr = re.compile('<.*?>')
-    cleantext = re.sub(cleanr, '', raw_html)
-    return cleantext
+    return re.sub(cleanr, '', raw_html)
 
 def get_ai_image(prompt):
-    """AI rasm yasash"""
     encoded_prompt = urllib.parse.quote(prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
 
-def get_image_url(entry):
-    """Rasm havolasini topish"""
+def get_image_url(entry): #
     if 'links' in entry:
         for link in entry.links:
             if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
@@ -54,14 +50,12 @@ def process_news():
                 continue
             
             title = entry.title
-            # Yangilikning batafsil qismi (description)
             description = entry.get('description', '')
-            description = clean_html(description)[:300] + "..." # Faqat 300 ta harf
+            description = clean_html(description)[:300] + "..."
             
             img_url = get_image_url(entry)
             is_uzbek = name in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz', 'Championat.asia']
 
-            # Tarjima qilish (xorijiy manbalar uchun)
             if not is_uzbek:
                 try:
                     title_uz = translator.translate(title, dest='uz').text
@@ -74,29 +68,6 @@ def process_news():
             if not img_url:
                 img_url = get_ai_image(title_uz)
 
-            # BATAFSIL MATN TUZILISHI
             caption = (
                 f"📢 **{title_uz}**\n\n"
                 f"📝 {desc_uz}\n\n"
-                f"🏛 Manba: **{name}**\n\n"
-                f"✅ @karnayuzb"
-            )
-            
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link))
-            
-            try:
-                bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
-                sent_news.add(entry.link)
-                if len(sent_news) > 200: sent_news.clear()
-                time.sleep(5)
-            except:
-                continue
-
-if __name__ == "__main__":
-    while True:
-        try:
-            process_news()
-            time.sleep(1200) # 20 daqiqa kutish
-        except Exception as e:
-            time.sleep(60)
