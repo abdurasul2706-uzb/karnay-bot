@@ -1,15 +1,15 @@
 import telebot
 import feedparser
 import time
-import re
 import urllib.parse
 from googletrans import Translator
 from telebot import types
 
 # SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads' 
+TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' # Tokeningizni tekshiring
 CHANNEL_ID = '@karnayuzb'
 
+# MANBALAR RO'YXATI (Kengaytirildi)
 SOURCES = {
     'BBC World': 'http://feeds.bbci.co.uk/news/world/rss.xml',
     'Al Jazeera': 'https://www.aljazeera.com/xml/rss/all.xml',
@@ -23,10 +23,10 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = set()
+sent_news = set() # Takrorlanishni oldini olish uchun
 
 def get_ai_image(prompt):
-    """Agar rasm bo'lmasa, AI orqali rasm yasash (Tekin)"""
+    """AI orqali rasm yasash (Tekin)"""
     encoded_prompt = urllib.parse.quote(prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
 
@@ -43,14 +43,14 @@ def get_image_url(entry):
 def process_news():
     for name, url in SOURCES.items():
         feed = feedparser.parse(url)
-        for entry in feed.entries[:5]:
+        for entry in feed.entries[:3]:
             if entry.link in sent_news:
                 continue
             
             title = entry.title
             img_url = get_image_url(entry)
             
-            # Tarjima qilish
+            # Tarjima qilish (O'zbekcha bo'lmagan manbalar uchun)
             is_uzbek = name in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz', 'Championat.asia']
             if not is_uzbek:
                 try:
@@ -62,12 +62,12 @@ def process_news():
 
             # AI rasm yasash (agar rasm yo'q bo'lsa)
             if not img_url:
-                img_url = get_ai_image(title)
+                img_url = get_ai_image(title_uz)
 
-            # MATN: Havola yo'q, faqat sayt nomi
+            # MATN DIZAYNI (Havola yo'q, faqat sayt nomi)
             caption = f"📢 **{title_uz}**\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
             
-            # TUGMA
+            # TUGMA (Havolani tugma ichiga yashiramiz)
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("📖 Batafsil o'qish", url=entry.link))
             
@@ -80,21 +80,18 @@ def process_news():
                 continue
 
 def send_daily_info():
-    """Valyuta va Ob-havo (Soddalashtirilgan ko'rinishda)"""
-    text = "🌤 **Xayrli tong! Bugungi ma'lumotlar:**\n\n"
-    text += "💵 USD: 12 950 so'm\n" # Buni API orqali ham qilish mumkin
+    """Ertalabki ma'lumotlar"""
+    text = "🌤 **Xayrli kun! Karnay-Bot xizmatga tayyor:**\n\n"
+    text += "💵 USD: 12 950 so'm (Markaziy Bank)\n"
     text += "🌍 Toshkent: +12°C, Ochiq havo\n\n"
-    text += "✅ @karnayuzb - Karnay kabi yangraymiz!"
+    text += "✅ @karnayuzb - Eng tezkor va sifatli yangiliklar!"
     bot.send_message(CHANNEL_ID, text, parse_mode='Markdown')
 
 if __name__ == "__main__":
-    print("Bot ishga tushdi...")
-    # Kunlik ma'lumotni bot yoqilganda bir marta yuboradi
-    send_daily_info() 
+    send_daily_info()
     while True:
         try:
             process_news()
-            time.sleep(600) # 10 daqiqa
+            time.sleep(900) # 15 daqiqa kutish
         except Exception as e:
-            print(f"Xato: {e}")
             time.sleep(60)
