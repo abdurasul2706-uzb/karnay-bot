@@ -8,8 +8,9 @@ from telebot import types
 from flask import Flask
 from threading import Thread
 
-# --- KICHIK VEB-SERVER (Render "Live" bo'lishi uchun) ---
+# 1. RENDER BEPUL REJIMDA O'CHIB QOLMASLIGI UCHUN VEB-SERVER
 app = Flask('')
+
 @app.route('/')
 def home():
     return "Bot is running!"
@@ -20,8 +21,8 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-# -------------------------------------------------------
 
+# 2. SOZLAMALAR
 TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds'
 CHANNEL_ID = '@karnayuzb'
 
@@ -31,24 +32,20 @@ SOURCES = {
     'Kun.uz': 'https://kun.uz/news/rss',
     'Daryo.uz': 'https://daryo.uz/feed/',
     'Terabayt.uz': 'https://www.terabayt.uz/feed',
-    'CNN News': 'http://rss.cnn.com/rss/edition_world.rss',
-    'Reuters': 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best',
-    'Championat.asia': 'https://championat.asia/uz/news/rss'
+    'Reuters': 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'
 }
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = set()
+sent_news = [] # Xabarlar takrorlanmasligi uchun
 
 def clean_html(raw_html):
+    """HTML teglarni tozalash"""
     cleanr = re.compile('<.*?>')
     return re.sub(cleanr, '', raw_html)
 
-def get_ai_image(prompt):
-    encoded_prompt = urllib.parse.quote(prompt)
-    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
-
 def get_image_url(entry):
+    """Rasm havolasini topish"""
     if 'links' in entry:
         for link in entry.links:
             if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
@@ -58,58 +55,56 @@ def get_image_url(entry):
     return None
 
 def process_news():
+    """Yangiliklarni tekshirish va yuborish"""
     for name, url in SOURCES.items():
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:3]:
-            if entry.link in sent_news:
-                continue
-            
-            title = entry.title
-            description = entry.get('description', '')
-            description = clean_html(description)[:300] + "..."
-            
-            img_url = get_image_url(entry)
-            is_uzbek = name in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz', 'Championat.asia']
-
-            if not is_uzbek:
-                try:
-                    title_uz = translator.translate(title, dest='uz').text
-                    desc_uz = translator.translate(description, dest='uz').text
-                except:
-                    title_uz, desc_uz = title, description
-            else:
-                title_uz, desc_uz = title, description
-
-            if not img_url:
-                img_url = get_ai_image(title_uz)
-
-            caption = f"📢 **{title_uz}**\n\n📝 {desc_uz}\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
-            
-            markup = types.InlineKeyboardMarkup(row_width=2)
-            markup.add(types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link))
-            markup.add(types.InlineKeyboardButton("👍", callback_data="like"), 
-                       types.InlineKeyboardButton("👎", callback_data="dislike"))
-            
-            try:
-                bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
-                sent_news.add(entry.link)
-                if len(sent_news) > 200: sent_news.clear()
-                time.sleep(5)
-            except:
-                continue
-
-            
-            if __name__ == "__main__":
-                keep_alive()  # <--- Bu yerda 4 ta bo'sh joy bo'lishi shart!
-                print("Bot uyg'ondi va ishga tushdi!")
-    
-                while True:
+        try:
+            print(f"{name} tekshirilmoqda...")
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:3]:
+                if entry.link in sent_news:
+                    continue
+                
+                title = entry.title
+                description = clean_html(entry.get('description', ''))[:300] + "..."
+                img_url = get_image_url(entry)
+                
+                # O'zbekcha bo'lmaganlarni tarjima qilish
+                if name not in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz']:
                     try:
-                        print("Yangiliklar tekshirilmoqda...")
-                        process_news()
-                        print("Tekshiruv tugadi. 5 daqiqa dam olamiz.")
-                        time.sleep(300) 
-                    except Exception as e:
-                        print(f"Xato yuz berdi: {e}")
-                        time.sleep(60)
+                        title = translator.translate(title, dest='uz').text
+                        description = translator.translate(description, dest='uz').text
+                    except:
+                        pass
 
+                caption = f"📢 **{title}**\n\n📝 {description}\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
+                
+                markup = types.InlineKeyboardMarkup(row_width=2)
+                btn_read = types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link)
+                btn_like = types.InlineKeyboardButton("👍", callback_data="like")
+                btn_dislike = types.InlineKeyboardButton("👎", callback_data="dislike")
+                markup.add(btn_read)
+                markup.add(btn_like, btn_dislike)
+
+                try:
+                    if img_url:
+                        bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
+                    else:
+                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
+                    
+                    sent_news.append(entry.link)
+                    if len(sent_news) > 100: sent_news.pop(0)
+                    time.sleep(5) # Telegram bloklamasligi uchun
+                except Exception as e:
+                    print(f"Yuborishda xato: {e}")
+        except Exception as e:
+            print(f"Manbada xato: {e}")
+
+# 3. ASOSIY ISHGA TUSHIRISH QISMI (XATOSIZ INDENTATION)
+if __name__ == "__main__":
+    keep_alive() # Veb-serverni yoqish
+    print("Bot uyg'ondi!")
+    
+    while True:
+        process_news()
+        print("Tekshiruv tugadi. 10 daqiqa dam olamiz.")
+        time.sleep(600) # 10 daqiqa kutish
