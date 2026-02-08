@@ -2,14 +2,14 @@ import telebot
 import feedparser
 import time
 import urllib.parse
+import re
 from googletrans import Translator
 from telebot import types
 
 # SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' # Tokeningizni tekshiring
+TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' # Tokeningiz
 CHANNEL_ID = '@karnayuzb'
 
-# MANBALAR RO'YXATI (Kengaytirildi)
 SOURCES = {
     'BBC World': 'http://feeds.bbci.co.uk/news/world/rss.xml',
     'Al Jazeera': 'https://www.aljazeera.com/xml/rss/all.xml',
@@ -23,15 +23,21 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = set() # Takrorlanishni oldini olish uchun
+sent_news = set() # Takrorlanishga qarshi
+
+def clean_html(raw_html):
+    """Matn ichidagi HTML teglarni tozalash"""
+    cleanr = re.compile('<.*?>')
+    cleantext = re.sub(cleanr, '', raw_html)
+    return cleantext
 
 def get_ai_image(prompt):
-    """AI orqali rasm yasash (Tekin)"""
+    """AI rasm yasash"""
     encoded_prompt = urllib.parse.quote(prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
 
 def get_image_url(entry):
-    """Rasm havolasini qidirish"""
+    """Rasm havolasini topish"""
     if 'links' in entry:
         for link in entry.links:
             if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
@@ -48,28 +54,36 @@ def process_news():
                 continue
             
             title = entry.title
-            img_url = get_image_url(entry)
+            # Yangilikning batafsil qismi (description)
+            description = entry.get('description', '')
+            description = clean_html(description)[:300] + "..." # Faqat 300 ta harf
             
-            # Tarjima qilish (O'zbekcha bo'lmagan manbalar uchun)
+            img_url = get_image_url(entry)
             is_uzbek = name in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz', 'Championat.asia']
+
+            # Tarjima qilish (xorijiy manbalar uchun)
             if not is_uzbek:
                 try:
                     title_uz = translator.translate(title, dest='uz').text
+                    desc_uz = translator.translate(description, dest='uz').text
                 except:
-                    title_uz = title
+                    title_uz, desc_uz = title, description
             else:
-                title_uz = title
+                title_uz, desc_uz = title, description
 
-            # AI rasm yasash (agar rasm yo'q bo'lsa)
             if not img_url:
                 img_url = get_ai_image(title_uz)
 
-            # MATN DIZAYNI (Havola yo'q, faqat sayt nomi)
-            caption = f"📢 **{title_uz}**\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
+            # BATAFSIL MATN TUZILISHI
+            caption = (
+                f"📢 **{title_uz}**\n\n"
+                f"📝 {desc_uz}\n\n"
+                f"🏛 Manba: **{name}**\n\n"
+                f"✅ @karnayuzb"
+            )
             
-            # TUGMA (Havolani tugma ichiga yashiramiz)
             markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("📖 Batafsil o'qish", url=entry.link))
+            markup.add(types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link))
             
             try:
                 bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
@@ -79,19 +93,10 @@ def process_news():
             except:
                 continue
 
-def send_daily_info():
-    """Ertalabki ma'lumotlar"""
-    text = "🌤 **Xayrli kun! Karnay-Bot xizmatga tayyor:**\n\n"
-    text += "💵 USD: 12 950 so'm (Markaziy Bank)\n"
-    text += "🌍 Toshkent: +12°C, Ochiq havo\n\n"
-    text += "✅ @karnayuzb - Eng tezkor va sifatli yangiliklar!"
-    bot.send_message(CHANNEL_ID, text, parse_mode='Markdown')
-
 if __name__ == "__main__":
-    send_daily_info()
     while True:
         try:
             process_news()
-            time.sleep(900) # 15 daqiqa kutish
+            time.sleep(1200) # 20 daqiqa kutish
         except Exception as e:
             time.sleep(60)
