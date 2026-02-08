@@ -2,32 +2,40 @@ import telebot
 import feedparser
 import time
 from googletrans import Translator
+from telebot import types
 
 # SOZLAMALAR
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads' 
 CHANNEL_ID = '@karnayuzb'
 
-# Manbalar ro'yxati (RSS)
+# MANBALAR RO'YXATI (Kanal rivoji uchun ko'paytirildi)
 SOURCES = {
     'BBC World': 'http://feeds.bbci.co.uk/news/world/rss.xml',
     'Al Jazeera': 'https://www.aljazeera.com/xml/rss/all.xml',
-    'Kun.uz': 'https://kun.uz/news/rss', # O'zbekcha manba
-    'Daryo.uz': 'https://daryo.uz/feed/', # O'zbekcha manba
+    'Kun.uz': 'https://kun.uz/news/rss',
+    'Daryo.uz': 'https://daryo.uz/feed/',
+    'Terabayt.uz': 'https://www.terabayt.uz/feed',
+    'CNN News': 'http://rss.cnn.com/rss/edition_world.rss',
     'Reuters': 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best',
+    'Championat.asia': 'https://championat.asia/uz/news/rss'
 }
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = [] # Bir xil yangilikni qayta tashlamaslik uchun
+sent_news = set() # Takrorlanishni oldini olish uchun "xotira"
 
 def get_image_url(entry):
-    """Yangilik ichidan rasm havolasini topish"""
+    """Rasm havolasini qidirish"""
     if 'links' in entry:
         for link in entry.links:
             if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
                 return link.get('href')
     if 'media_content' in entry:
         return entry.media_content[0]['url']
+    if 'description' in entry and '<img' in entry.description:
+        import re
+        img_src = re.search(r'<img src="([^"]+)"', entry.description)
+        if img_src: return img_src.group(1)
     return None
 
 def process_news():
@@ -35,36 +43,51 @@ def process_news():
         print(f"{name} tekshirilmoqda...")
         feed = feedparser.parse(url)
         
-        for entry in feed.entries[:3]: # Har bir manbadan oxirgi 3 ta yangilik
+        for entry in feed.entries[:5]: # Oxirgi 5 ta yangilik
+            # Takrorlanishni tekshirish (Link orqali)
             if entry.link in sent_news:
                 continue
             
             title = entry.title
-            link = entry.link
             img_url = get_image_url(entry)
             
-            # Agar manba o'zbekcha bo'lmasa, tarjima qilish
-            if name not in ['Kun.uz', 'Daryo.uz']:
+            # Faqat xorijiy manbalarni tarjima qilish
+            if name not in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz', 'Championat.asia']:
                 try:
                     title = translator.translate(title, dest='uz').text
                 except:
                     pass
             
-            caption = f"📢 **{title}**\n\n📌 Manba: {name}\n🔗 {link}\n\n✅ @karnayuzb"
+            # MATN DIZAYNI (Havolasiz, faqat sayt nomi)
+            caption = f"📢 **{title}**\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
+            
+            # TUGMA (Havolani tugma ichiga yashiramiz)
+            markup = types.InlineKeyboardMarkup()
+            btn_read = types.InlineKeyboardButton("📖 Batafsil o'qish", url=entry.link)
+            markup.add(btn_read)
             
             try:
                 if img_url:
-                    bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
+                    bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
                 else:
-                    bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', disable_web_page_preview=False)
+                    bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
                 
-                sent_news.append(entry.link)
-                if len(sent_news) > 100: sent_news.pop(0) # Ro'yxatni tozalab turish
-                time.sleep(5) # Telegram bloklamasligi uchun
+                # Xotiraga saqlash
+                sent_news.add(entry.link)
+                # Xotira juda kattalashib ketmasligi uchun
+                if len(sent_news) > 200:
+                    sent_news.clear()
+                    
+                time.sleep(3) # Telegram chekloviga tushmaslik uchun
             except Exception as e:
-                print(f"Xato: {e}")
+                print(f"Xato yuz berdi: {e}")
 
 if __name__ == "__main__":
+    print("Bot ishga tushdi...")
     while True:
-        process_news()
-        time.sleep(1800) # 30 daqiqa kutish
+        try:
+            process_news()
+            time.sleep(600) # 10 daqiqa kutish (Tezkorlik uchun)
+        except Exception as e:
+            print(f"Global xato: {e}")
+            time.sleep(60)
