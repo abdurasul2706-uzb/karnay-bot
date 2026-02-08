@@ -103,13 +103,13 @@ def process_news():
                 keep_alive()  # <--- Bu yerda 4 ta bo'sh joy bo'lishi shart!
                 print("Bot uyg'ondi va ishga tushdi!")
     
-            while True:
-            try:
-            print("Yangiliklar tekshirilmoqda...")
-            process_news()
-            print("Tekshiruv tugadi. 5 daqiqa dam olamiz.")
-            time.sleep(300) 
-        except Exception as e:
-            print(f"Xato yuz berdi: {e}")
-            time.sleep(60)
+                while True:
+                    try:
+                        print("Yangiliklar tekshirilmoqda...")
+                        process_news()
+                        print("Tekshiruv tugadi. 5 daqiqa dam olamiz.")
+                        time.sleep(300) 
+                    except Exception as e:
+                        print(f"Xato yuz berdi: {e}")
+                        time.sleep(60)
 
