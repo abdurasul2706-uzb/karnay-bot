@@ -5,9 +5,24 @@ import urllib.parse
 import re
 from googletrans import Translator
 from telebot import types
+from flask import Flask
+from threading import Thread
 
-# SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds' #
+# --- KICHIK VEB-SERVER (Render "Live" bo'lishi uchun) ---
+app = Flask('')
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# -------------------------------------------------------
+
+TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds'
 CHANNEL_ID = '@karnayuzb'
 
 SOURCES = {
@@ -23,7 +38,7 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = set() #
+sent_news = set()
 
 def clean_html(raw_html):
     cleanr = re.compile('<.*?>')
@@ -33,7 +48,7 @@ def get_ai_image(prompt):
     encoded_prompt = urllib.parse.quote(prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=768&nologo=true"
 
-def get_image_url(entry): #
+def get_image_url(entry):
     if 'links' in entry:
         for link in entry.links:
             if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
@@ -68,6 +83,26 @@ def process_news():
             if not img_url:
                 img_url = get_ai_image(title_uz)
 
-            caption = (
-                f"📢 **{title_uz}**\n\n"
-                f"📝 {desc_uz}\n\n"
+            caption = f"📢 **{title_uz}**\n\n📝 {desc_uz}\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
+            
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            markup.add(types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link))
+            markup.add(types.InlineKeyboardButton("👍", callback_data="like"), 
+                       types.InlineKeyboardButton("👎", callback_data="dislike"))
+            
+            try:
+                bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
+                sent_news.add(entry.link)
+                if len(sent_news) > 200: sent_news.clear()
+                time.sleep(5)
+            except:
+                continue
+
+if __name__ == "__main__":
+    keep_alive() # Veb-serverni ishga tushirish
+    while True:
+        try:
+            process_news()
+            time.sleep(1200)
+        except Exception as e:
+            time.sleep(60)
