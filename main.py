@@ -98,16 +98,17 @@ def process_news():
             except:
                 continue
 
+            
             if __name__ == "__main__":
-            keep_alive() # Serverni fonda yoqamiz
-            print("Bot uyg'ondi va ishga tushdi!")
+                keep_alive()  # <--- Bu yerda 4 ta bo'sh joy bo'lishi shart!
+                print("Bot uyg'ondi va ishga tushdi!")
     
             while True:
-        try:
-            print("Yangiliklar tekshirilmoqda...") # Logda ko'rinishi uchun
+            try:
+            print("Yangiliklar tekshirilmoqda...")
             process_news()
             print("Tekshiruv tugadi. 5 daqiqa dam olamiz.")
-            time.sleep(300) # 20 daqiqa juda ko'p, 5 daqiqa (300 sek) qilamiz
+            time.sleep(300) 
         except Exception as e:
             print(f"Xato yuz berdi: {e}")
             time.sleep(60)
