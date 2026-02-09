@@ -1,123 +1,104 @@
 import telebot
 import feedparser
 import time
-import urllib.parse
-import re
+import requests
+from bs4 import BeautifulSoup
 from googletrans import Translator
 from telebot import types
 from flask import Flask
 from threading import Thread
 
-# 1. RENDERDA 24/7 ISHLASH UCHUN KICHIK SERVER
+# 1. RENDER UCHUN SERVER
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "Bot is running!"
+def home(): return "Bot is running!"
+def run(): app.run(host='0.0.0.0', port=8080)
+def keep_alive(): Thread(target=run).start()
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# 2. ASOSIY SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads' 
-CHANNEL_ID = '@karnayuzb' # Kanal userneymi to'g'riligini tekshiring!
+# 2. SOZLAMALAR (To'g'rilangan tokeningiz bilan)
+TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
+CHANNEL_ID = '@karnayuzb'
 
 SOURCES = {
-    'BBC World': 'http://feeds.bbci.co.uk/news/world/rss.xml',
-    'Al Jazeera': 'https://www.aljazeera.com/xml/rss/all.xml',
     'Kun.uz': 'https://kun.uz/news/rss',
     'Daryo.uz': 'https://daryo.uz/feed/',
-    'Terabayt.uz': 'https://www.terabayt.uz/feed',
-    'Reuters': 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'
+    'BBC World': 'http://feeds.bbci.co.uk/news/world/rss.xml',
+    'Terabayt.uz': 'https://www.terabayt.uz/feed'
 }
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-sent_news = [] # Xabarlar xotirasi
+sent_news = []
 
-def clean_html(raw_html):
-    """HTML belgilarni tozalash"""
-    cleanr = re.compile('<.*?>')
-    return re.sub(cleanr, '', raw_html)
-
-def get_image_url(entry):
-    """RSS ichidan rasm topish"""
-    if 'links' in entry:
-        for link in entry.links:
-            if 'image' in link.get('type', '') or 'media' in link.get('rel', ''):
-                return link.get('href')
-    if 'media_content' in entry:
-        return entry.media_content[0]['url']
-    return None
+def get_full_content(url):
+    """Sayt ichiga kirib, asosiy rasm va to'liqroq matnni olish"""
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Asosiy rasmni qidirish (og:image tegi orqali)
+        image = soup.find("meta", property="og:image")
+        img_url = image['content'] if image else None
+        
+        # To'liqroq tavsifni qidirish
+        description = soup.find("meta", property="og:description")
+        text = description['content'] if description else ""
+        
+        return img_url, text
+    except:
+        return None, ""
 
 def process_news():
-    """Yangiliklarni o'qish va yuborish"""
     for name, url in SOURCES.items():
         try:
             print(f"---> {name} tekshirilmoqda...")
             feed = feedparser.parse(url)
             
-            for entry in feed.entries[:2]: # Har bir manbadan 2 ta yangilik
+            for entry in feed.entries[:3]:
                 if entry.link in sent_news:
                     continue
                 
-                print(f"Yangi xabar topildi: {entry.title[:30]}...")
+                # Saytdan to'liq ma'lumotni tortish
+                img_url, full_text = get_full_content(entry.link)
                 
                 title = entry.title
-                description = clean_html(entry.get('description', ''))[:250] + "..."
-                img_url = get_image_url(entry)
+                # Agar saytdan matn ololmasa, RSS'dagi qisqa matnni oladi
+                description = full_text if len(full_text) > 50 else entry.get('description', '')
                 
-                # CHET EL YANGILIKLARINI TARJIMA QILISH
+                # HTML teglardan tozalash
+                description = BeautifulSoup(description, "html.parser").get_text()
+                
+                # Tarjima qilish (Chet el manbalari uchun)
                 if name not in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz']:
-                    print("Tarjima qilinmoqda...")
                     try:
-                        title_uz = translator.translate(title, dest='uz').text
-                        desc_uz = translator.translate(description, dest='uz').text
-                        title, description = title_uz, desc_uz
-                        print("Tarjima muvaffaqiyatli.")
-                    except Exception as e:
-                        print(f"Tarjimada kechikish bo'ldi (original tilda yuboriladi): {e}")
+                        title = translator.translate(title, dest='uz').text
+                        description = translator.translate(description[:1000], dest='uz').text # Maksimal 1000 belgi
+                    except: pass
 
-                caption = f"📢 **{title}**\n\n📝 {description}\n\n🏛 Manba: **{name}**\n\n✅ @karnayuzb"
-                
-                # TUGMALAR
-                markup = types.InlineKeyboardMarkup(row_width=2)
-                markup.add(types.InlineKeyboardButton("📖 To'liq o'qish", url=entry.link))
-                markup.add(types.InlineKeyboardButton("👍", callback_data="l"), 
-                           types.InlineKeyboardButton("👎", callback_data="d"))
+                # Post formati (Chiroyli ko'rinishda)
+                caption = f"🔥 **{title}**\n\n"
+                caption += f"{description[:800]}...\n\n" # Uzun matn
+                caption += f"🏛 Manba: **{name}**\n"
+                caption += f"👉 @karnayuzb"
 
-                # TELEGRAMGA YUBORISH
+                markup = types.InlineKeyboardMarkup()
+                markup.add(types.InlineKeyboardButton("Batafsil o'qish 🌐", url=entry.link))
+
                 try:
-                    print("Telegramga yuborish urinishi...")
                     if img_url:
                         bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
                     else:
                         bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
                     
-                    print("✅ XABAR KANALGA CHIQDI!")
+                    print(f"✅ Yuborildi: {title[:30]}")
                     sent_news.append(entry.link)
-                    if len(sent_news) > 100: sent_news.pop(0)
-                    time.sleep(5) 
+                    time.sleep(5)
                 except Exception as e:
-                    print(f"❌ YUBORISHDA XATO (Adminlikni tekshiring): {e}")
+                    print(f"Xato: {e}")
+        except: pass
 
-        except Exception as e:
-            print(f"❗ Manba bilan ulanishda xato ({name}): {e}")
-
-# ASOSIY QISM
 if __name__ == "__main__":
-    print("Boshlanmoqda...")
-    keep_alive() # Veb-serverni yoqish (Render uchun)
-    
+    keep_alive()
     while True:
-        try:
-            process_news()
-            print("Tekshiruv yakunlandi. 10 daqiqa tanaffus.")
-            time.sleep(600) # 10 daqiqa kutish
-        except Exception as e:
-            print(f"Kutilmagan xato: {e}")
-            time.sleep(60)
+        process_news()
+        time.sleep(600) # 10 daqiqa tanaffus
