@@ -2,7 +2,7 @@ import telebot
 import feedparser
 import time
 import requests
-import os
+import re
 from bs4 import BeautifulSoup
 from googletrans import Translator
 from telebot import types
@@ -19,7 +19,10 @@ def keep_alive(): Thread(target=run).start()
 # 2. SOZLAMALAR
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
-DB_FILE = "sent_news.txt" # Xotira fayli
+
+# Global xotira (Runtime memory)
+# Professional yechim uchun bu yerda Database bo'lishi kerak
+SENT_NEWS_CACHE = set() 
 
 SOURCES = {
     'Kun.uz': 'https://kun.uz/news/rss',
@@ -31,73 +34,69 @@ SOURCES = {
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
 
-# XOTIRA FUNKSIYALARI
-def load_sent_news():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return f.read().splitlines()
-    return []
-
-def save_sent_news(link):
-    with open(DB_FILE, "a") as f:
-        f.write(link + "\n")
-
-def get_full_article(url):
-    """Sayt ichidagi to'liq matn va rasmni tortish"""
+def get_smart_content(url):
+    """Sayt ichidagi eng muhim va to'liq matnni topish"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Rasm topish
+        # Asosiy rasm
         image = soup.find("meta", property="og:image")
         img_url = image['content'] if image else None
         
-        # TO'LIQ MATNNI QIDIRISH (Asosiy qism)
-        paragraphs = soup.find_all('p')
-        full_text = ""
+        # Matnni yig'ish (Professional skraping)
+        # Saytning asosiy maqola qismini qidirish
+        article_body = soup.find(['article', 'div.content', 'div.post-text', 'div.article-body'])
+        if article_body:
+            paragraphs = article_body.find_all('p')
+        else:
+            paragraphs = soup.find_all('p')
+            
+        text_parts = []
         for p in paragraphs:
-            txt = p.get_text().strip()
-            if len(txt) > 40: # Juda qisqa gaplarni tashlab ketamiz
-                full_text += txt + "\n\n"
-            if len(full_text) > 1500: # Telegram limiti uchun cheklov
+            p_text = p.get_text().strip()
+            if len(p_text) > 60: # Reklama yoki qisqa gaplarni filtrlaymiz
+                text_parts.append(p_text)
+            if len(text_parts) >= 5: # Eng muhim 5 ta paragraf
                 break
-        
-        return img_url, full_text
+                
+        return img_url, "\n\n".join(text_parts)
     except:
         return None, ""
 
 def process_news():
-    sent_news = load_sent_news()
     for name, url in SOURCES.items():
         try:
             print(f"---> {name} tekshirilmoqda...")
             feed = feedparser.parse(url)
             
-            for entry in feed.entries[:3]:
-                if entry.link in sent_news:
+            # Faqat eng oxirgi 2 ta yangilikni tekshiramiz (Takrorlanishni kamaytirish uchun)
+            for entry in feed.entries[:2]:
+                if entry.link in SENT_NEWS_CACHE:
                     continue
                 
-                print(f"Yangi xabar: {entry.title}")
-                img_url, full_content = get_full_article(entry.link)
+                img_url, full_text = get_smart_content(entry.link)
                 
                 title = entry.title
-                content = full_content if len(full_content) > 100 else entry.get('description', '')
+                # Agar saytdan matn ololmasa RSS'dagini oladi
+                content = full_text if len(full_text) > 150 else entry.get('description', '')
+                content = re.sub('<[^<]+?>', '', content) # HTML'dan tozalash
                 
-                # Tarjima (Chet el manbalari uchun)
                 if name not in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz']:
                     try:
                         title = translator.translate(title, dest='uz').text
-                        content = translator.translate(content[:2000], dest='uz').text
+                        content = translator.translate(content[:1500], dest='uz').text
                     except: pass
 
-                # POST FORMATI
-                caption = f"🔥 **{title}**\n\n"
-                caption += f"{content[:1000]}..." # 1000 belgi - eng optimal hajm
-                caption += f"\n\n🏛 Manba: **{name}**\n👉 @karnayuzb"
+                # POST FORMATI (PROFESSIONAL)
+                caption = f"🏛 **{name.upper()}**\n\n"
+                caption += f"🔥 **{title}**\n\n"
+                caption += f"📝 {content[:900]}..." # Telegram limiti
+                caption += f"\n\n🔗 @karnayuzb — Yangiliklar kanali"
 
                 markup = types.InlineKeyboardMarkup()
-                markup.add(types.InlineKeyboardButton("Batafsil (Saytda) 🌐", url=entry.link))
+                markup.add(types.InlineKeyboardButton("Batafsil maqolani o'qish 🌐", url=entry.link))
 
                 try:
                     if img_url:
@@ -105,15 +104,18 @@ def process_news():
                     else:
                         bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
                     
-                    save_sent_news(entry.link)
-                    print(f"✅ Yuborildi.")
-                    time.sleep(5)
+                    SENT_NEWS_CACHE.add(entry.link)
+                    print(f"✅ Muvaffaqiyatli yuborildi.")
+                    time.sleep(10) # Blokirovka oldini olish
                 except Exception as e:
-                    print(f"Xato: {e}")
-        except: pass
+                    print(f"Yuborishda xato: {e}")
+        except Exception as e:
+            print(f"Manba xatosi: {e}")
 
 if __name__ == "__main__":
     keep_alive()
     while True:
         process_news()
-        time.sleep(600)
+        # Takrorlanishni kamaytirish uchun tekshiruv vaqtini 30 daqiqa qilamiz
+        print("30 daqiqa tanaffus...")
+        time.sleep(1800) 
