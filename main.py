@@ -23,7 +23,7 @@ def keep_alive():
     t.start()
 
 # 2. ASOSIY SOZLAMALAR
-TOKEN = '8358476165:AAFsfhih8yADOpXaJa_JCvndQBDUUQZWmds'
+TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads' 
 CHANNEL_ID = '@karnayuzb' # Kanal userneymi to'g'riligini tekshiring!
 
 SOURCES = {
