@@ -57,13 +57,23 @@ def get_image_url(entry):
 def process_news():
     """Yangiliklarni tekshirish va yuborish"""
     for name, url in SOURCES.items():
-        try:
-            print(f"{name} tekshirilmoqda...")
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:
-                if entry.link in sent_news:
-                    continue
-                
+        
+                              # ... (caption va markup yaratilgan joydan keyin)
+
+                try:
+                    print(f"Xabar tayyor, yuborishga urinish: {title}") # LOG UCHUN
+                    if img_url:
+                        bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown', reply_markup=markup)
+                    else:
+                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
+                    
+                    print("MUVAFFAQIYATLI YUBORILDI! ✅") # AGAR BU CHIQSA, TELEGRAMNI TEKSHIRING
+                    sent_news.append(entry.link)
+                    if len(sent_news) > 100: sent_news.pop(0)
+                    time.sleep(5) 
+                except Exception as e:
+                    print(f"YUBORISHDA XATO: {e}") # AGAR BU CHIQSA, MUAMMONI AYTADI
+  
                 title = entry.title
                 description = clean_html(entry.get('description', ''))[:300] + "..."
                 img_url = get_image_url(entry)
