@@ -2,3 +2,5 @@ pyTelegramBotAPI
 feedparser
 googletrans==4.0.0-rc1
 Flask
+beautifulsoup4
+requests
