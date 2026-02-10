@@ -8,7 +8,7 @@ from googletrans import Translator
 from flask import Flask
 from threading import Thread
 
-# 1. RENDER SERVER (Uyg'oq saqlash uchun)
+# 1. SERVER
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is running!"
@@ -19,9 +19,8 @@ def keep_alive(): Thread(target=run).start()
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
 
-# 50 ta nufuzli manbalar ro'yxati
+# Manbalar (Siz aytgan 50 tagacha kengaytirilgan ro'yxat)
 SOURCES = {
-    # O'zbekiston
     'Kun.uz': 'https://kun.uz/news/rss',
     'Daryo.uz': 'https://daryo.uz/feed/',
     'Gazeta.uz': 'https://www.gazeta.uz/uz/rss/',
@@ -71,17 +70,97 @@ SOURCES = {
     'Al Arabiya': 'https://english.alarabiya.net/.mrss/en/news.xml',
     'Politico': 'https://www.politico.com/rss/politicopicks.xml',
     'The Verge Tech': 'https://www.theverge.com/tech/rss/index.xml',
-    'The Times of India': 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms'
+    'The Times of India': 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms'}
+
+
 }
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
 SENT_NEWS_CACHE = set()
 
-def clean_and_shorten(text, limit=850):
+def clean_and_shorten(text, limit=900):
     """Matnni tozalaydi va rasm ostiga sig'adigan qilib mantiqiy qisqartiradi"""
+    # Cookie va ortiqcha gaplarni o'chirish
     patterns = [r'.*?cookies.*?(\.|\!)', r'.*?davom etish.*?(\.|\!)', r'.*?rozilik.*?(\.|\!)']
     for p in patterns:
         text = re.sub(p, '', text, flags=re.IGNORECASE | re.DOTALL)
     
-    text
+    text = re.sub(r'\n+', '\n\n', text).strip()
+    
+    if len(text) > limit:
+        # Matnni nuqtadan kesib, chala gap qolmasligini ta'minlaymiz
+        shortened = text[:limit].rsplit('.', 1)[0] + "."
+        return shortened
+    return text
+
+def get_optimized_content(url):
+    """Saytdan rasm va tozalangan matnni olish"""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.content, 'html.parser')
+        
+        # Rasm topish
+        img = soup.find("meta", property="og:image")
+        img_url = img['content'] if img else None
+        
+        # Matn (Eng muhim paragraflar)
+        paras = soup.find_all('p')
+        content = ""
+        for p in paras:
+            p_text = p.get_text().strip()
+            if len(p_text) > 60 and "cookies" not in p_text.lower():
+                content += p_text + "\n\n"
+            if len(content) > 1500: break # Keyinroq qisqartirish uchun zaxira
+            
+        return img_url, content
+    except:
+        return None, ""
+
+def process_news():
+    for name, url in SOURCES.items():
+        try:
+            print(f"Tekshirilmoqda: {name}")
+            feed = feedparser.parse(url)
+            
+            for entry in feed.entries[:2]:
+                if entry.link in SENT_NEWS_CACHE: continue
+                
+                img_url, full_text = get_optimized_content(entry.link)
+                title = entry.title
+                
+                # Tarjima
+                if name not in ['Kun.uz', 'Daryo.uz', 'Gazeta.uz']:
+                    try:
+                        title = translator.translate(title, dest='uz').text
+                        full_text = translator.translate(full_text[:1200], dest='uz').text
+                    except: pass
+
+                # Matnni bitta xabarga sig'adigan qilib sozlash
+                # Sarlavha + Matn + Reklama hammasi 1024 dan oshmasligi kerak
+                clean_text = clean_and_shorten(full_text)
+                
+                caption = f"🏛 **{name.upper()}**\n\n"
+                caption += f"🔥 **{title}**\n\n"
+                caption += f"📝 {clean_text}\n\n"
+                caption += f"✅ @karnayuzb — Eng so'nggi xabarlar"
+
+                try:
+                    if img_url:
+                        # HAMMASI BIRGALIKDA - Rasm ostida matn
+                        bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
+                    else:
+                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
+                    
+                    SENT_NEWS_CACHE.add(entry.link)
+                    time.sleep(5)
+                except Exception as e:
+                    print(f"Xato: {e}")
+        except: continue
+
+if __name__ == "__main__":
+    keep_alive()
+    while True:
+        process_news()
+        time.sleep(300) # 5 daqiqa tanaffus
