@@ -8,7 +8,7 @@ from googletrans import Translator
 from flask import Flask
 from threading import Thread
 
-# 1. SERVER (Render uxlab qolmasligi uchun)
+# 1. RENDER UCHUN SERVER
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is running!"
@@ -19,113 +19,151 @@ def keep_alive(): Thread(target=run).start()
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
 
+# 50 ta manba (O'zbekiston va Dunyo)
 SOURCES = {
     'Kun.uz': 'https://kun.uz/news/rss',
     'Daryo.uz': 'https://daryo.uz/feed/',
     'Gazeta.uz': 'https://www.gazeta.uz/uz/rss/',
+    'Qalampir.uz': 'https://qalampir.uz/uz/rss',
+    'Terabayt.uz': 'https://www.terabayt.uz/feed',
     'BBC O‘zbek': 'https://www.bbc.com/uzbek/index.xml',
-    'Qalampir.uz': 'https://qalampir.uz/uz/rss'
+    'Reuters (World)': 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best',
+    'Al Jazeera': 'https://www.aljazeera.com/xml/rss/all.xml',
+    'The New York Times': 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    'The Wall Street Journal': 'https://feeds.a.dj.com/rss/RSSWorldNews.xml',
+    'The Washington Post': 'https://feeds.washingtonpost.com/rss/world',
+    'CNN International': 'http://rss.cnn.com/rss/edition_world.rss',
+    'Associated Press (AP)': 'https://newsatme.com/go/ap/world',
+    'The Guardian': 'https://www.theguardian.com/world/rss',
+    'Bloomberg': 'https://www.bloomberg.com/politics/feeds/site.xml',
+    'Forbes': 'https://www.forbes.com/real-time/feed2/',
+    'National Geographic': 'https://www.nationalgeographic.com/index.rss',
+    'Nature': 'https://www.nature.com/nature.rss',
+    'NASA News': 'https://www.nasa.gov/rss/dyn/breaking_news.rss',
+    'TechCrunch': 'https://techcrunch.com/feed/',
+    'The Verge': 'https://www.theverge.com/rss/index.xml',
+    'Wired': 'https://www.wired.com/feed/rss',
+    'Harvard Business Review': 'https://hbr.org/rss/hbr.xml',
+    'Euronews': 'https://www.euronews.com/rss?level=vertical&name=news',
+    'France24': 'https://www.france24.com/en/rss',
+    'Deutsche Welle (DW)': 'https://rss.dw.com/xml/rss-en-all',
+    'CNET': 'https://www.cnet.com/rss/news/',
+    'Engadget': 'https://www.engadget.com/rss.xml',
+    'Gizmodo': 'https://gizmodo.com/rss',
+    'Scientific American': 'https://www.scientificamerican.com/section/all/rss/',
+    'The Economist': 'https://www.economist.com/sections/world/rss.xml',
+    'Independent': 'https://www.independent.co.uk/news/world/rss',
+    'Daily Mail': 'https://www.dailymail.co.uk/news/worldnews/index.rss',
+    'Sky News': 'https://news.sky.com/feeds/rss/world.xml',
+    'Fox News': 'https://feeds.foxnews.com/foxnews/world',
+    'ABC News': 'https://abcnews.go.com/abcnews/internationalheadlines',
+    'CBS News': 'https://www.cbsnews.com/latest/rss/world',
+    'Nikkei Asia': 'https://asia.nikkei.com/rss/feed/nar',
+    'South China Morning Post': 'https://www.scmp.com/rss/91/feed.xml',
+    'Al Arabiya': 'https://english.alarabiya.net/.mrss/en/news.xml',
+    'TASS (English)': 'https://tass.com/rss/v2.xml',
+    'Interfax (English)': 'https://interfax.com/news/rss/',
+    'Anadolu Agency': 'https://www.aa.com.tr/en/rss/default?cat=world',
+    'Haaretz': 'https://www.haaretz.com/cmlink/1.4623547',
+    'The Times of India': 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms',
+    'Politico': 'https://www.politico.com/rss/politicopicks.xml'
 }
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-SENT_NEWS_CACHE = []
+SENT_NEWS_CACHE = set()
 
-def deep_clean_text(text):
-    """Cookie, reklama va keraksiz gaplarni butunlay qirqib tashlaydi"""
-    # Cookie va rozilik haqidagi barcha gaplarni o'chirish (Regex orqali)
+def clean_text(text):
+    """Cookie, reklama va ortiqcha gaplarni tozalash"""
     patterns = [
         r'.*?cookies-fayllardan.*?(\.|\!)',
         r'.*?davom etish orqali.*?(\.|\!)',
         r'.*?rozilik bildirasiz.*?(\.|\!)',
         r'.*?Maxfiylik siyosati.*?(\.|\!)',
-        r'Kun\.uz', r'Daryo', r'Gazeta\.uz' # Sayt nomlarini matn ichidan tozalash
+        r'.*?cookies.*?(\.|\!)',
     ]
     for pattern in patterns:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
-    
-    # Ortiqcha bo'shliqlar va yangi qatorlarni tozalash
-    text = re.sub(r'\n+', '\n\n', text)
     return text.strip()
 
-def get_full_article(url):
-    """Sayt ichiga kirib, eng asosiy maqola qismini ajratib oladi"""
+def get_full_content(url):
+    """Sayt ichiga kirib, butun matnni yig'ish"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        res = requests.get(url, headers=headers, timeout=15)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(res.content, 'html.parser')
         
-        # Keraksiz HTML elementlarni olib tashlash
-        for tag in soup(['script', 'style', 'header', 'footer', 'aside', 'nav', 'form']):
-            tag.decompose()
-
-        # Asosiy rasmni qidirish
+        # Rasm
         img = soup.find("meta", property="og:image")
         img_url = img['content'] if img else None
         
-        # Maqola matni joylashgan ehtimoliy bloklarni qidirish
-        content_area = soup.find(['article', 'div.single-content', 'div.article-body', 'div.post-content'])
-        if not content_area:
-            content_area = soup
-
-        paragraphs = content_area.find_all('p')
-        cleaned_paragraphs = []
-        
-        for p in paragraphs:
+        # Matn yig'ish
+        paras = soup.find_all('p')
+        text_list = []
+        for p in paras:
             p_text = p.get_text().strip()
-            # Qisqa va keraksiz paragraflarni filtrlaymiz
-            if len(p_text) > 40 and not any(word in p_text.lower() for word in ['cookies', 'copyright', 'all rights']):
-                cleaned_paragraphs.append(p_text)
+            if len(p_text) > 60:
+                text_list.append(p_text)
         
-        full_text = "\n\n".join(cleaned_paragraphs)
-        return img_url, deep_clean_text(full_text)
+        return img_url, "\n\n".join(text_list)
     except:
         return None, ""
 
 def process_news():
-    """Manbalarni birma-bir, to'xtovsiz tekshirish"""
     for name, url in SOURCES.items():
         try:
-            print(f"Skanerlanmoqda: {name}...")
+            print(f"---> {name} tekshirilmoqda...")
             feed = feedparser.parse(url)
             
-            for entry in feed.entries[:2]:
-                if entry.link in SENT_NEWS_CACHE:
-                    continue
+            for entry in feed.entries[:1]: # Har safar faqat eng yangisini
+                if entry.link in SENT_NEWS_CACHE: continue
                 
-                img_url, main_text = get_full_article(entry.link)
+                img_url, full_text = get_full_content(entry.link)
+                title = entry.title
                 
-                # Agar saytdan matn ololmasa, sarlavhani o'zini yuboradi
-                display_text = main_text if len(main_text) > 50 else entry.get('description', '')
-                
-                # Telegram limiti: 1024 belgi. Biz 1000 belgi qilib kesamiz.
-                if len(display_text) > 1000:
-                    display_text = display_text[:997] + "..."
+                # Agar matn yo'q bo'lsa RSS tavsifini olish
+                text = full_text if len(full_text) > 100 else entry.get('summary', '')
+                text = clean_text(BeautifulSoup(text, "html.parser").get_text())
 
-                caption = f"🏛 **{name.upper()}**\n\n"
-                caption += f"🔥 **{entry.title}**\n\n"
-                caption += f"📝 {display_text}\n\n"
-                caption += f"✅ @karnayuzb — Eng tezkor xabarlar"
+                # DUNYO YANGILIKLARINI TARJIMA QILISH
+                if name not in ['Kun.uz', 'Daryo.uz', 'Gazeta.uz', 'Qalampir.uz', 'Terabayt.uz']:
+                    try:
+                        title = translator.translate(title, dest='uz').text
+                        # Tarjima 3000 belgidan oshmasligi kerak
+                        text = translator.translate(text[:3000], dest='uz').text
+                    except: pass
 
+                # XABARNI TAYYORLASH
+                header = f"🏛 **{name.upper()}**\n🔥 **{title}**\n\n"
+                footer = f"\n\n📢 @karnayuzb — Dunyo yangiliklari\n#dunyo #{name.replace(' ', '')}"
+
+                # AGAR MATN JUDA UZUN BO'LSA (TELEGRAM LIMITI 4096)
+                total_message = header + text + footer
+                
                 try:
                     if img_url:
-                        bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
+                        # Rasm bilan birga (Limit 1024)
+                        if len(total_message) < 1000:
+                            bot.send_photo(CHANNEL_ID, img_url, caption=total_message, parse_mode='Markdown')
+                        else:
+                            # Rasm alohida, matn alohida (To'liq chiqishi uchun)
+                            bot.send_photo(CHANNEL_ID, img_url)
+                            # Matnni 4000 belgilik bo'laklarga bo'lib yuborish
+                            for i in range(0, len(total_message), 4000):
+                                bot.send_message(CHANNEL_ID, total_message[i:i+4000], parse_mode='Markdown')
                     else:
-                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
+                        for i in range(0, len(total_message), 4000):
+                            bot.send_message(CHANNEL_ID, total_message[i:i+4000], parse_mode='Markdown')
                     
-                    SENT_NEWS_CACHE.append(entry.link)
-                    if len(SENT_NEWS_CACHE) > 100: SENT_NEWS_CACHE.pop(0)
-                    print(f"✅ Yuborildi: {entry.title[:30]}")
-                    time.sleep(5)
+                    SENT_NEWS_CACHE.add(entry.link)
+                    print(f"✅ Yuborildi: {name}")
+                    time.sleep(2) # Tezkor yuborish uchun kamaytirildi
                 except Exception as e:
                     print(f"Yuborishda xato: {e}")
-        except Exception as e:
-            print(f"{name} manbasida muammo: {e}")
-            continue
+        except: continue
 
 if __name__ == "__main__":
     keep_alive()
     while True:
         process_news()
-        print("Barcha manbalar ko'rildi. 10 daqiqa kutamiz.")
-        time.sleep(600)
+        time.sleep(60) # Har daqiqada yangi manbalarni tekshirish
