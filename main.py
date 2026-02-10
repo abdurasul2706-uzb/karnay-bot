@@ -8,7 +8,7 @@ from googletrans import Translator
 from flask import Flask
 from threading import Thread
 
-# 1. SERVER
+# 1. SERVER (Render uxlab qolmasligi uchun)
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is running!"
@@ -29,70 +29,83 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
-SENT_NEWS_CACHE = [] # Xotira ro'yxati
+SENT_NEWS_CACHE = []
 
-def clean_news_text(text):
-    """Cookie va keraksiz texnik matnlarni butunlay tozalash"""
-    # Cookie va maxfiylik haqidagi barcha gaplarni o'chiradi
-    text = re.sub(r'.*?(cookies-fayllardan|foydalanishga rozilik|Maxfiylik siyosati|davom etish orqali).*?(\.|\!)', '', text, flags=re.IGNORECASE)
-    # Ortiqcha bo'shliqlarni tozalash
+def deep_clean_text(text):
+    """Cookie, reklama va keraksiz gaplarni butunlay qirqib tashlaydi"""
+    # Cookie va rozilik haqidagi barcha gaplarni o'chirish (Regex orqali)
+    patterns = [
+        r'.*?cookies-fayllardan.*?(\.|\!)',
+        r'.*?davom etish orqali.*?(\.|\!)',
+        r'.*?rozilik bildirasiz.*?(\.|\!)',
+        r'.*?Maxfiylik siyosati.*?(\.|\!)',
+        r'Kun\.uz', r'Daryo', r'Gazeta\.uz' # Sayt nomlarini matn ichidan tozalash
+    ]
+    for pattern in patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Ortiqcha bo'shliqlar va yangi qatorlarni tozalash
     text = re.sub(r'\n+', '\n\n', text)
     return text.strip()
 
-def get_full_and_clean_content(url):
-    """Sayt ichidan eng to'liq va toza matnni tortish"""
+def get_full_article(url):
+    """Sayt ichiga kirib, eng asosiy maqola qismini ajratib oladi"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         res = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(res.content, 'html.parser')
         
-        # Keraksiz bloklarni (cookie, reklama) o'chirib tashlaymiz
-        for junk in soup(['script', 'style', 'aside', 'footer', 'header', '.cookie-alert', '.sharing']):
-            junk.decompose()
+        # Keraksiz HTML elementlarni olib tashlash
+        for tag in soup(['script', 'style', 'header', 'footer', 'aside', 'nav', 'form']):
+            tag.decompose()
 
-        # Asosiy rasmni topish
+        # Asosiy rasmni qidirish
         img = soup.find("meta", property="og:image")
         img_url = img['content'] if img else None
         
-        # Matn yig'ish (paragrafma-paragraf)
-        paragraphs = soup.find_all('p')
-        content_list = []
+        # Maqola matni joylashgan ehtimoliy bloklarni qidirish
+        content_area = soup.find(['article', 'div.single-content', 'div.article-body', 'div.post-content'])
+        if not content_area:
+            content_area = soup
+
+        paragraphs = content_area.find_all('p')
+        cleaned_paragraphs = []
+        
         for p in paragraphs:
             p_text = p.get_text().strip()
-            # Cookie matni bo'lsa o'tkazib yuboramiz
-            if "cookies" in p_text.lower() or "rozilik" in p_text.lower():
-                continue
-            if len(p_text) > 40:
-                content_list.append(p_text)
+            # Qisqa va keraksiz paragraflarni filtrlaymiz
+            if len(p_text) > 40 and not any(word in p_text.lower() for word in ['cookies', 'copyright', 'all rights']):
+                cleaned_paragraphs.append(p_text)
         
-        # Maqolani birlashtiramiz
-        full_text = "\n\n".join(content_list)
-        return img_url, clean_news_text(full_text)
+        full_text = "\n\n".join(cleaned_paragraphs)
+        return img_url, deep_clean_text(full_text)
     except:
         return None, ""
 
 def process_news():
-    """Barcha manbalarni birma-bir va uzluksiz tekshirish"""
+    """Manbalarni birma-bir, to'xtovsiz tekshirish"""
     for name, url in SOURCES.items():
         try:
-            print(f"--- {name} tekshirilmoqda ---") #
+            print(f"Skanerlanmoqda: {name}...")
             feed = feedparser.parse(url)
             
-            for entry in feed.entries[:2]: # Har biridan 2 ta yangi xabar
+            for entry in feed.entries[:2]:
                 if entry.link in SENT_NEWS_CACHE:
                     continue
                 
-                img_url, full_text = get_full_and_clean_content(entry.link)
+                img_url, main_text = get_full_article(entry.link)
                 
-                # Agar saytdan matn ololmasa RSS'dagini oladi
-                text = full_text if len(full_text) > 100 else entry.get('description', '')
-                text = BeautifulSoup(text, "html.parser").get_text()
+                # Agar saytdan matn ololmasa, sarlavhani o'zini yuboradi
+                display_text = main_text if len(main_text) > 50 else entry.get('description', '')
                 
-                # Chiroyli sarlavha va hashtaglar
+                # Telegram limiti: 1024 belgi. Biz 1000 belgi qilib kesamiz.
+                if len(display_text) > 1000:
+                    display_text = display_text[:997] + "..."
+
                 caption = f"🏛 **{name.upper()}**\n\n"
                 caption += f"🔥 **{entry.title}**\n\n"
-                caption += f"📝 {text[:950]}..." # Maksimal hajm
-                caption += f"\n\n✅ @karnayuzb — Eng so'nggi xabarlar\n#yangiliklar #{name.replace('.', '')}"
+                caption += f"📝 {display_text}\n\n"
+                caption += f"✅ @karnayuzb — Eng tezkor xabarlar"
 
                 try:
                     if img_url:
@@ -101,18 +114,18 @@ def process_news():
                         bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
                     
                     SENT_NEWS_CACHE.append(entry.link)
-                    if len(SENT_NEWS_CACHE) > 100: SENT_NEWS_CACHE.pop(0) # Xotirani tozalash
-                    print(f"✅ Yuborildi: {name}")
-                    time.sleep(10) # Telegram spamdan himoya
+                    if len(SENT_NEWS_CACHE) > 100: SENT_NEWS_CACHE.pop(0)
+                    print(f"✅ Yuborildi: {entry.title[:30]}")
+                    time.sleep(5)
                 except Exception as e:
-                    print(f"Xato: {e}")
+                    print(f"Yuborishda xato: {e}")
         except Exception as e:
-            print(f"{name} manbasida xato: {e}")
+            print(f"{name} manbasida muammo: {e}")
             continue
 
 if __name__ == "__main__":
     keep_alive()
     while True:
         process_news()
-        print("Barcha manbalar tekshirildi. 15 daqiqa kutamiz...")
-        time.sleep(900)
+        print("Barcha manbalar ko'rildi. 10 daqiqa kutamiz.")
+        time.sleep(600)
