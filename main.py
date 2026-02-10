@@ -71,8 +71,6 @@ SOURCES = {
     'Politico': 'https://www.politico.com/rss/politicopicks.xml',
     'The Verge Tech': 'https://www.theverge.com/tech/rss/index.xml',
     'The Times of India': 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms'}
-
-
 }
 
 bot = telebot.TeleBot(TOKEN)
