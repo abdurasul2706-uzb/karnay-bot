@@ -9,20 +9,14 @@ from telebot import types
 from flask import Flask
 from threading import Thread
 
-# 1. RENDER UCHUN SERVER
 app = Flask('')
 @app.route('/')
 def home(): return "Bot is running!"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
-# 2. SOZLAMALAR
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
-
-# Global xotira (Runtime memory)
-# Professional yechim uchun bu yerda Database bo'lishi kerak
-SENT_NEWS_CACHE = set() 
 
 SOURCES = {
     'Kun.uz': 'https://kun.uz/news/rss',
@@ -33,36 +27,60 @@ SOURCES = {
 
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
+SENT_NEWS_CACHE = set()
 
-def get_smart_content(url):
-    """Sayt ichidagi eng muhim va to'liq matnni topish"""
+def clean_text(text):
+    """Keraksiz cookie va reklama matnlarini o'chirish"""
+    unwanted_phrases = [
+        "cookies-fayllardan foydalanamiz",
+        "Davom etish orqali siz cookies-dan",
+        "Maxfiylik siyosati",
+        "reklama",
+        "Kun.uz", # Matn ichidagi ortiqcha nomlar
+        "Daryo"
+    ]
+    for phrase in unwanted_phrases:
+        text = re.sub(rf".*?{phrase}.*?(\.|\!)", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+def get_smart_content(url, source_name):
+    """Har bir sayt uchun maxsus va kengaytirilgan skraping"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Asosiy rasm
+        # Rasm topish
         image = soup.find("meta", property="og:image")
         img_url = image['content'] if image else None
         
-        # Matnni yig'ish (Professional skraping)
-        # Saytning asosiy maqola qismini qidirish
-        article_body = soup.find(['article', 'div.content', 'div.post-text', 'div.article-body'])
-        if article_body:
-            paragraphs = article_body.find_all('p')
-        else:
-            paragraphs = soup.find_all('p')
-            
+        # Sayt turiga qarab asosiy matn blokini topish
+        content_selectors = [
+            'div.single-content', 'div.article-body', 'div.post-content', 
+            'div.news-text', 'div.content', 'article'
+        ]
+        
+        main_content = None
+        for selector in content_selectors:
+            main_content = soup.select_one(selector)
+            if main_content: break
+        
+        if not main_content: main_content = soup
+        
+        # Barcha paragraflarni yig'ish
+        paragraphs = main_content.find_all('p')
         text_parts = []
         for p in paragraphs:
             p_text = p.get_text().strip()
-            if len(p_text) > 60: # Reklama yoki qisqa gaplarni filtrlaymiz
+            # Cookie va juda qisqa matnlarni tashlab yuborish
+            if len(p_text) > 50 and "cookies-fayllardan" not in p_text:
                 text_parts.append(p_text)
-            if len(text_parts) >= 5: # Eng muhim 5 ta paragraf
-                break
-                
-        return img_url, "\n\n".join(text_parts)
-    except:
+        
+        # Eng muhim 6-7 ta paragrafni birlashtirish (Telegram limiti uchun)
+        full_text = "\n\n".join(text_parts[:7])
+        return img_url, clean_text(full_text)
+    except Exception as e:
+        print(f"Skraping xatosi ({source_name}): {e}")
         return None, ""
 
 def process_news():
@@ -71,32 +89,32 @@ def process_news():
             print(f"---> {name} tekshirilmoqda...")
             feed = feedparser.parse(url)
             
-            # Faqat eng oxirgi 2 ta yangilikni tekshiramiz (Takrorlanishni kamaytirish uchun)
-            for entry in feed.entries[:2]:
-                if entry.link in SENT_NEWS_CACHE:
-                    continue
+            for entry in feed.entries[:3]:
+                if entry.link in SENT_NEWS_CACHE: continue
                 
-                img_url, full_text = get_smart_content(entry.link)
+                print(f"Yangi xabar topildi: {entry.title}")
+                img_url, full_text = get_smart_content(entry.link, name)
                 
                 title = entry.title
                 # Agar saytdan matn ololmasa RSS'dagini oladi
-                content = full_text if len(full_text) > 150 else entry.get('description', '')
-                content = re.sub('<[^<]+?>', '', content) # HTML'dan tozalash
+                content = full_text if len(full_text) > 100 else entry.get('description', '')
+                content = BeautifulSoup(content, "html.parser").get_text()
                 
+                # Chet el manbalarini tarjima qilish
                 if name not in ['Kun.uz', 'Daryo.uz', 'Terabayt.uz']:
                     try:
                         title = translator.translate(title, dest='uz').text
                         content = translator.translate(content[:1500], dest='uz').text
                     except: pass
 
-                # POST FORMATI (PROFESSIONAL)
+                # POST FORMATI
                 caption = f"🏛 **{name.upper()}**\n\n"
                 caption += f"🔥 **{title}**\n\n"
-                caption += f"📝 {content[:900]}..." # Telegram limiti
-                caption += f"\n\n🔗 @karnayuzb — Yangiliklar kanali"
+                caption += f"📝 {content[:950]}..." # Telegram rasm osti limiti
+                caption += f"\n\n🔗 @karnayuzb — Eng tezkor xabarlar"
 
                 markup = types.InlineKeyboardMarkup()
-                markup.add(types.InlineKeyboardButton("Batafsil maqolani o'qish 🌐", url=entry.link))
+                markup.add(types.InlineKeyboardButton("Batafsil o'qish 🌐", url=entry.link))
 
                 try:
                     if img_url:
@@ -105,17 +123,16 @@ def process_news():
                         bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', reply_markup=markup)
                     
                     SENT_NEWS_CACHE.add(entry.link)
-                    print(f"✅ Muvaffaqiyatli yuborildi.")
-                    time.sleep(10) # Blokirovka oldini olish
+                    print(f"✅ {name} xabari yuborildi.")
+                    time.sleep(10) 
                 except Exception as e:
-                    print(f"Yuborishda xato: {e}")
+                    print(f"Yuborish xatosi: {e}")
         except Exception as e:
-            print(f"Manba xatosi: {e}")
+            print(f"Manba xatosi ({name}): {e}")
 
 if __name__ == "__main__":
     keep_alive()
     while True:
         process_news()
-        # Takrorlanishni kamaytirish uchun tekshiruv vaqtini 30 daqiqa qilamiz
-        print("30 daqiqa tanaffus...")
-        time.sleep(1800) 
+        print("15 daqiqa dam olamiz...")
+        time.sleep(900)
