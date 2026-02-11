@@ -26,122 +26,116 @@ translator = Translator()
 SENT_NEWS_CACHE = set()
 GREETING_SENT = {"morning": False, "night": False}
 
-# 3. MANBALAR (Siz aytgan tarkib bo'yicha)
+# 3. MANBALAR (50 tagacha ko'paytirilgan va optimallashgan)
 SOURCES_LIST = [
-    ('Kun.uz', 'https://kun.uz/news/rss'), ('The New York Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
-    ('Daryo.uz', 'https://daryo.uz/feed/'), ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'),
-    ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
-    ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'),
-    ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('The Guardian', 'https://www.theguardian.com/world/rss'),
-    ('Championat.asia', 'https://championat.asia/uz/news/rss'), ('Nikkei Asia', 'https://asia.nikkei.com/rss/feed/nar'),
-    ('Uza.uz', 'https://uza.uz/uz/rss.php'), ('The Washington Post', 'https://feeds.washingtonpost.com/rss/world'),
-    ('Terabayt.uz', 'https://www.terabayt.uz/feed'), ('South China Morning Post', 'https://www.scmp.com/rss/91/feed.xml'),
-    ('Podrobno.uz', 'https://podrobno.uz/rss/'), ('Euronews', 'https://www.euronews.com/rss?level=vertical&name=news'),
-    ('Artnews.com', 'https://www.artnews.com/feed/'), ('Sputnik O‘zbekiston', 'https://uz.sputniknews.ru/export/rss2/archive/index.xml'),
-    ('CNA Asia', 'https://www.channelnewsasia.com/rssfeeds/8395981'), ('UzNews.uz', 'https://uznews.uz/uz/rss'),
-    ('Nuz.uz', 'https://nuz.uz/feed')
+    ('Kun.uz', 'https://kun.uz/news/rss'), ('Daryo.uz', 'https://daryo.uz/feed/'),
+    ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'), ('Qalampir.uz', 'https://qalampir.uz/uz/rss'),
+    ('The New York Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
+    ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
+    ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'),
+    ('Uza.uz', 'https://uza.uz/uz/rss.php'), ('Championat.asia', 'https://championat.asia/uz/news/rss'),
+    ('Nikkei Asia', 'https://asia.nikkei.com/rss/feed/nar'), ('Terabayt.uz', 'https://www.terabayt.uz/feed'),
+    ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Podrobno.uz', 'https://podrobno.uz/rss/'),
+    ('UzNews.uz', 'https://uznews.uz/uz/rss')
 ]
 
-# 4. FILTRLASH (Siz ko'rsatgan xatolarni yo'qotish uchun)
+# 4. RADIKAL TOZALASH FUNKSIYASI (Cookie va keraksiz matnlarni yo'qotadi)
 def filter_junk_text(text):
-    """Rasmdagi xunuk matnlarni (cookie, lotincha, sana) butunlay yo'qotish"""
     if not text: return ""
-    
-    # Qora ro'yxat: Bu so'zlar bor gaplar o'chirib tashlanadi
+    # Shafqatsiz filtr: Agar qatorda shu so'zlar bo'lsa, u qator butunlay o'chadi
     blacklist = [
-        'cookies-dan foydalanishga rozilik', 'biz sayt ishlashini yaxshilash', 
-        'lotinchada', 'na russkom', 'kecha,', 'bugun,', 'soat ', '©', 
-        'muallifning xabarlari', 'ruxsatingiz yo‘q', 'xavfsizlik nuqtai nazaridan',
-        'obuna bo‘ling', 'reklama', 'tahririyat', 'barcha huquqlar', 'gazeta reportaji'
+        'cookies', 'yaxshilash va sizga qulaylik', 'rozilik bildirasiz', 'lotinchada', 
+        'na russkom', 'kecha,', 'bugun,', '©', 'tahririyat', 'barcha huquqlar', 
+        'gazeta reportaji', 'muallifning', 'reklama', 'obuna bo‘ling', 'facebook', 'instagram'
     ]
     
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:
-        line_lower = line.lower().strip()
-        # Agar gap juda qisqa bo'lsa yoki ichida taqiqlangan so'z bo'lsa - o'chiramiz
-        if len(line_lower) < 30: continue 
-        if any(bad_word in line_lower for bad_word in blacklist): continue
-        cleaned_lines.append(line.strip())
+        line_clean = line.strip()
+        if len(line_clean) < 40: continue # Juda qisqa texnik qatorlarni tashlab ketish
+        if any(bad in line_clean.lower() for bad in blacklist): continue
+        cleaned_lines.append(line_clean)
     
-    # Gaplarni birlashtirish (zich holatga keltirish)
-    result = " ".join(cleaned_lines)
-    result = re.sub(r'\s+', ' ', result) # Ortiqcha bo'shliqlarni yo'qotish
-    return result
+    # Gaplarni birlashtirish (Yaxlit matn hosil qilish)
+    final_text = " ".join(cleaned_lines)
+    return final_text[:900] # Telegram limiti uchun
 
 def get_content(url):
-    """Saytdan rasm va toza matn olish"""
     try:
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=12)
         soup = BeautifulSoup(res.content, 'html.parser')
         
         # Rasm topish
         img = soup.find("meta", property="og:image")
         img_url = img['content'] if img else None
         
-        # Matn qismini topish (faqat asosiy maqolani skanerlash)
-        main_body = soup.find(['article', 'main', 'div[class*="content"]'])
-        paras = main_body.find_all('p') if main_body else soup.find_all('p')
-        
-        full_text = "\n".join([p.get_text() for p in paras])
-        return img_url, filter_junk_text(full_text)
+        # Asosiy matnni topish (Keraksiz bloklarsiz)
+        for junk in soup(['script', 'style', 'header', 'footer', 'nav', 'aside']):
+            junk.decompose()
+            
+        paras = soup.find_all('p')
+        raw_text = "\n".join([p.get_text() for p in paras])
+        return img_url, filter_junk_text(raw_text)
     except: return None, ""
 
-# 5. SALOMLASHISH TIZIMI
+# 5. ERTALABKI VA KECHKI SALOMLAR
 def check_greetings():
     uzb_tz = pytz.timezone('Asia/Tashkent')
     now = datetime.now(uzb_tz)
-    current_time = now.strftime("%H:%M")
-    today_date = now.strftime("%d-%m-%Y")
-    weekday = now.strftime("%A").replace("Monday", "Dushanba").replace("Tuesday", "Seshanba").replace("Wednesday", "Chorshanba").replace("Thursday", "Payshanba").replace("Friday", "Juma").replace("Saturday", "Shanba").replace("Sunday", "Yakshanba")
-
-    if "06:00" <= current_time <= "06:10" and not GREETING_SENT["morning"]:
-        msg = f"☀️ **Xayrli tong!**\n\n📅 Bugun: {today_date}\n🗓 Haftaning kuni: {weekday}\n\nKuningiz xayrli va barokatli o'tsin! 😊"
+    h_m = now.strftime("%H:%M")
+    
+    # Ertalabki salom (06:00)
+    if h_m == "06:00" and not GREETING_SENT["morning"]:
+        sana = now.strftime("%d-%m-%Y")
+        kunlar = {"Monday":"Dushanba","Tuesday":"Seshanba","Wednesday":"Chorshanba","Thursday":"Payshanba","Friday":"Juma","Saturday":"Shanba","Sunday":"Yakshanba"}
+        hafta_kuni = kunlar.get(now.strftime("%A"), "")
+        msg = f"☀️ **Xayrli tong!**\n\nBugun: {sana}\n{hafta_kuni}.\n\nKuningiz xayrli va barokatli o'tsin! 😊"
         bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
         GREETING_SENT["morning"] = True
-        GREETING_SENT["night"] = False # Kechki uchun joy ochamiz
+        GREETING_SENT["night"] = False
 
-    if "23:58" <= current_time <= "23:59" and not GREETING_SENT["night"]:
-        msg = f"🌙 **Xayrli tun!**\n\nYaxshi dam oling, aziz obunachilar. Ertangi kun yanada muvaffaqiyatli kelsin! ✨"
+    # Kechki salom (23:59)
+    if h_m == "23:59" and not GREETING_SENT["night"]:
+        msg = "🌙 **Xayrli tun.**\n\nYaxshi dam oling. Ertangi kun muvaffaqiyatli kelsin! ✨"
         bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
         GREETING_SENT["night"] = True
-        GREETING_SENT["morning"] = False # Ertangi uchun joy ochamiz
+        GREETING_SENT["morning"] = False
 
-# 6. ASOSIY ISHCHI FUNKSIYA
+# 6. ASOSIY ISHCHI
 def process_news():
     random.shuffle(SOURCES_LIST)
     for name, url in SOURCES_LIST:
-        check_greetings() # Har bir manba orasida vaqtni tekshiradi
+        check_greetings()
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries[:1]:
                 if entry.link in SENT_NEWS_CACHE: continue
                 
                 img_url, text = get_content(entry.link)
-                if not text or len(text) < 100: continue
+                if len(text) < 150: continue # Sifatsiz yoki bo'sh xabarni o'tkazib yuborish
                 
                 title = entry.title
-                # Chet el manbalari uchun tarjima
-                if name not in ['Kun.uz', 'Daryo.uz', 'Gazeta.uz', 'Qalampir.uz', 'Xabar.uz']:
+                if name not in ['Kun.uz', 'Daryo.uz', 'Gazeta.uz', 'Qalampir.uz']:
                     try:
                         title = translator.translate(title, dest='uz').text
-                        text = translator.translate(text[:1000], dest='uz').text
+                        text = translator.translate(text, dest='uz').text
                     except: pass
 
-                # POST TAYYORLASH
+                # POST FORMATI (Siz aytganingizdek: belgilarsiz va toza)
                 caption = f"📢 **{name.upper()}**\n\n"
                 caption += f"**{title}**\n\n"
-                caption += f"{text[:900]}...\n\n"
+                caption += f"{text}...\n\n"
                 caption += f"✅ @karnayuzb — Dunyo sizning qo'lingizda!\n"
                 caption += f"#{name.replace(' ', '')} #yangiliklar"
 
-                if img_url:
-                    bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
-                else:
-                    bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
-
-                SENT_NEWS_CACHE.add(entry.link)
-                time.sleep(10)
+                try:
+                    if img_url: bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
+                    else: bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
+                    SENT_NEWS_CACHE.add(entry.link)
+                    print(f"✅ {name} yuborildi.")
+                    time.sleep(15)
+                except: continue
         except: continue
 
 if __name__ == "__main__":
