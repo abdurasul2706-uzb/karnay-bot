@@ -1,6 +1,7 @@
-pyTelegramBotAPI
+pytelebotapi
 feedparser
-googletrans==4.0.0-rc1
-Flask
-beautifulsoup4
 requests
+beautifulsoup4
+googletrans==4.0.0-rc1
+flask
+pytz
