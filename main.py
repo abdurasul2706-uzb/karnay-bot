@@ -12,152 +12,142 @@ from threading import Thread
 from datetime import datetime
 import pytz
 
-# 1. SERVER (Render uchun)
+# 1. SERVER SOZLAMALARI
 app = Flask('')
 @app.route('/')
-def home(): return "Bot uyg'oq!"
+def home(): return "Karnay.uzb Bot Ishlamoqda!"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
 # 2. BOT SOZLAMALARI
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
+# O'z kanalingiz logotipi URL manzili (TASS uchun)
+CHANNEL_LOGO = "https://i.postimg.cc/mD8zYpXG/Karnay-uzb.jpg" 
+
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
 
-# XOTIRA FAYLI (Qayta-qayta tashlamasligi uchun)
-DB_FILE = "sent_news.txt"
-if not os.path.exists(DB_FILE):
-    with open(DB_FILE, "w") as f: f.write("")
+# XOTIRA TIZIMI (Takrorlanmaslik kafolati)
+SENT_NEWS_FILE = "sent_links.txt"
+if not os.path.exists(SENT_NEWS_FILE):
+    with open(SENT_NEWS_FILE, "w") as f: pass
 
-def is_sent(link):
-    try:
-        with open(DB_FILE, "r") as f:
-            return link in f.read()
-    except: return False
+def is_already_sent(link):
+    with open(SENT_NEWS_FILE, "r") as f:
+        return link in f.read()
 
-def save_sent(link):
-    try:
-        with open(DB_FILE, "a") as f:
-            f.write(link + "\n")
-    except: pass
+def mark_as_sent(link):
+    with open(SENT_NEWS_FILE, "a") as f:
+        f.write(link + "\n")
 
-# 3. MANBALAR (Siz so'ragan barcha yo'nalishlar bo'yicha)
+# 3. MANBALAR (O'zbekiston manbalari ko'paytirildi va hammasi aralashtirildi)
 SOURCES = [
     ('Kun.uz', 'https://kun.uz/news/rss'),
     ('Daryo.uz', 'https://daryo.uz/feed/'),
     ('Qalampir.uz', 'https://qalampir.uz/uz/rss'),
     ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'),
     ('Xabar.uz', 'https://xabar.uz/uz/rss'),
-    ('BBC Uzbek', 'https://www.bbc.com/uzbek/index.xml'),
+    ('Uza.uz', 'https://uza.uz/uz/rss.php'),
+    ('Zamon.uz', 'https://zamon.uz/uz/rss'),
+    ('Bugun.uz', 'https://bugun.uz/feed/'),
+    ('Anhor.uz', 'https://anhor.uz/feed/'),
+    ('UzNews.uz', 'https://uznews.uz/uz/rss'),
+    ('TASS News', 'https://tass.com/rss/v2.xml'),
     ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'),
+    ('BBC Uzbek', 'https://www.bbc.com/uzbek/index.xml'),
     ('The New York Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
     ('Associated Press', 'https://newsatme.com/go/ap/world'),
     ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
-    ('The Washington Post', 'https://feeds.washingtonpost.com/rss/world'),
     ('Deutsche Welle', 'https://rss.dw.com/xml/rss-en-all'),
-    ('Championat Asia', 'https://championat.asia/uz/news/rss'),
-    ('Tribuna.uz', 'https://kun.uz/news/category/sport/rss'),
-    ('TASS News', 'https://tass.com/rss/v2.xml'),
-    ('TechCrunch', 'https://techcrunch.com/feed/'), # Texnika
-    ('ArtNews', 'https://www.artnews.com/feed/') # San'at
+    ('Championat Asia', 'https://championat.asia/uz/news/rss')
 ]
+random.shuffle(SOURCES) # Manbalarni har doim chalkashtirib tashlash
 
-# 4. TOZALASH VA FILTRLASH
-def clean_text(text):
-    if not text: return ""
-    # "Xunuk" va texnik jumlalar filtri
-    blacklist = [
-        'cookies', 'rozilik', 'lotinchada', 'na russkom', '©', 'tahririyat', 
-        'muallif', 'reklama', 'facebook', 'instagram', 'telegram', 
-        'e-pochtangiz', 'ruxsatingiz yo‘q', 'xavfsizlik nuqtai'
-    ]
-    lines = [line.strip() for line in text.split('\n') if len(line.strip()) > 55]
+# 4. TOZALASH VA FILTRLASH (TASS va boshqalar uchun)
+def professional_clean(text, source_name):
+    if not text: return None
+    
+    # TASS xabarlaridagi texnik qismlarni o'chirish
+    if "TASS" in source_name or "TASS" in text:
+        text = re.sub(r'^[A-Z\s]+,\s\d+\s[A-Za-z]+\.\s/TASS/\.', '', text)
+        text = re.sub(r'\(TASS\)', '', text)
+        text = text.replace('MOSKVA', '').replace('TASS', '')
+
+    blacklist = ['cookies', 'yaxshilash', 'rozilik', 'lotinchada', 'na russkom', '©', 'facebook', 'instagram']
+    lines = [line.strip() for line in text.split('\n') if len(line.strip()) > 60]
     cleaned = " ".join([l for l in lines if not any(bad in l.lower() for bad in blacklist)])
     
-    # Ortiqcha bo'shliqlarni yo'qotish va bitta yaxlit matn qilish
-    cleaned = re.sub(r'\s+', ' ', cleaned)
-    return cleaned.strip()
+    return cleaned.strip()[:900] if len(cleaned) > 150 else None
 
-def get_full_article(url):
+def get_content(url, source_name):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        res = requests.get(url, headers=headers, timeout=15)
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         soup = BeautifulSoup(res.content, 'html.parser')
         
-        # Rasm olish
-        img = soup.find("meta", property="og:image")
-        img_url = img['content'] if img else None
-        
-        # Matn qismlarini tozalash
-        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form']): 
-            tag.decompose()
+        # Rasm tanlash (TASS bo'lsa o'z logotipingiz, bo'lmasa saytdan)
+        if "TASS" in source_name:
+            img_url = CHANNEL_LOGO
+        else:
+            img = soup.find("meta", property="og:image")
+            img_url = img['content'] if img else None
             
+        for tag in soup(['script', 'style', 'nav', 'header', 'footer']): tag.decompose()
         paras = soup.find_all('p')
-        text = clean_text("\n".join([p.get_text() for p in paras]))
+        text = professional_clean("\n".join([p.get_text() for p in paras]), source_name)
         
-        # Agar matn juda qisqa bo'lsa (yoki topilmasa), bo'sh qaytaradi
-        if len(text) < 150:
-            return img_url, None
-            
-        return img_url, text[:1000] # Telegram caption limiti uchun
-    except:
-        return None, None
+        return img_url, text
+    except: return None, None
 
-# 5. SALOMLASHISH TIZIMI
-def check_greetings():
-    try:
-        tz = pytz.timezone('Asia/Tashkent')
-        now = datetime.now(tz)
-        hm = now.strftime("%H:%M")
-        
-        if hm == "06:00":
-            bot.send_message(CHANNEL_ID, f"☀️ **Xayrli tong!**\n\n📅 Bugun: {now.strftime('%d-%m-%Y')}\nKuningiz xayrli va barokatli o'tsin! 😊", parse_mode='Markdown')
-            time.sleep(60)
-        elif hm == "23:59":
-            bot.send_message(CHANNEL_ID, "🌙 **Xayrli tun.**\nYaxshi dam oling! ✨", parse_mode='Markdown')
-            time.sleep(60)
-    except: pass
-
-# 6. ASOSIY ISHCHI
-def start_bot():
+# 5. ASOSIY ISHCHI FUNKSIYA
+def run_bot():
     while True:
-        random.shuffle(SOURCES)
+        random.shuffle(SOURCES) # Har siklda manbalarni yana bir bor aralashtirish
         for name, url in SOURCES:
-            check_greetings()
             try:
                 feed = feedparser.parse(url)
                 for entry in feed.entries[:2]:
-                    if is_sent(entry.link): continue
+                    if is_already_sent(entry.link): continue
                     
-                    img_url, text = get_full_article(entry.link)
-                    
-                    # AGAR MATN TOPILMASA, POSTNI TASHLAMAYMIZ!
-                    if not text:
-                        continue
+                    img_url, text = get_content(entry.link, name)
+                    if not text: continue
                     
                     title = entry.title
-                    # Tarjima (Chet el manbalari)
-                    if any(word in url.lower() for word in ['reuters', 'nytimes', 'ap', 'aljazeera', 'washingtonpost', 'dw', 'tass', 'techcrunch', 'artnews']):
+                    # Chet el manbalarini tarjima qilish
+                    if any(x in url.lower() for x in ['reuters', 'tass', 'nytimes', 'ap', 'aljazeera', 'dw']):
                         try:
                             title = translator.translate(title, dest='uz').text
                             text = translator.translate(text, dest='uz').text
                         except: pass
 
-                    caption = f"📢 **{name.upper()}**\n\n**{title}**\n\n{text}...\n\n✅ @karnayuzb — Eng so'nggi xabarlar"
-                    
+                    # TASS sarlavhasini tozalash
+                    if "TASS" in name:
+                        title = title.replace('TASS:', '').strip()
+
+                    # FORMATLASH (Siz so'ragan: Karnay.uzb brendi bilan)
+                    caption = f"📢 **KARNAY.UZB**\n\n"
+                    caption += f"**{title}**\n\n"
+                    caption += f"{text}...\n\n"
+                    caption += f"✅ @karnayuzb — Dunyo sizning qo'lingizda!\n"
+                    caption += f"#Karnay #Yangiliklar #O'zbekiston"
+
                     try:
                         if img_url:
                             bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
                         else:
                             bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
                         
-                        save_sent(entry.link)
-                        time.sleep(25) # Kanalda juda tiqilib ketmasligi uchun
-                    except: continue
+                        mark_as_sent(entry.link)
+                        time.sleep(30) # Spamsiz yuborish
+                    except Exception as e:
+                        if "caption is too long" in str(e):
+                            # Agar matn juda uzun bo'lib ketsa, qisqartirib qayta urinish
+                            bot.send_message(CHANNEL_ID, caption[:1024], parse_mode='Markdown')
+                            mark_as_sent(entry.link)
+                        continue
             except: continue
-        time.sleep(180) # Har 3 daqiqada yangi aylanish
+        time.sleep(300) # 5 daqiqa dam olib keyin yangi aylanish
 
 if __name__ == "__main__":
     keep_alive()
-    start_bot()
+    run_bot()
