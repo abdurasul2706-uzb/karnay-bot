@@ -4,6 +4,7 @@ import time
 import requests
 import re
 import random
+import sqlite3
 import os
 from bs4 import BeautifulSoup
 from googletrans import Translator
@@ -12,162 +13,169 @@ from threading import Thread
 from datetime import datetime
 import pytz
 
-# 1. SERVER
+# 1. SERVER SOZLAMALARI (Bot o'chib qolmasligi uchun)
 app = Flask('')
 @app.route('/')
-def home(): return "Karnay.uzb Multi-Source System Active"
+def home(): return "Karnay.uzb Professional Media System is Online"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
-# 2. BOT SOZLAMALARI
+# 2. KONFIGURATSIYA
 TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
 CHANNEL_ID = '@karnayuzb'
 CHANNEL_LOGO = "https://i.postimg.cc/mD8zYpXG/Karnay-uzb.jpg" 
-
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
+uzb_tz = pytz.timezone('Asia/Tashkent')
 
-# XOTIRA TIZIMI
-DB_FILE = "global_news_db.txt"
-if not os.path.exists(DB_FILE):
-    with open(DB_FILE, "w") as f: pass
+# 3. MA'LUMOTLAR BAZASI (SQLite - Takrorlanmaslik uchun eng xavfsiz yo'l)
+def init_db():
+    conn = sqlite3.connect('news_history.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)''')
+    conn.commit()
+    conn.close()
 
 def is_duplicate(link):
-    try:
-        with open(DB_FILE, "r") as f:
-            return link in f.read()
-    except: return False
+    conn = sqlite3.connect('news_history.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM news WHERE link=?", (link,))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
 
-def log_link(link):
+def save_to_db(link):
+    conn = sqlite3.connect('news_history.db')
+    c = conn.cursor()
     try:
-        with open(DB_FILE, "a") as f:
-            f.write(link + "\n")
+        c.execute("INSERT INTO news VALUES (?)", (link,))
+        conn.commit()
     except: pass
+    conn.close()
 
-# 3. KENGAYTIRILGAN MANBALAR RO'YXATI
+# 4. UNIVERSAL MANBALAR RO'YXATI (48 ta nufuzli manba - aralashtirilgan)
 SOURCES = [
-    # --- O'ZBEKISTON ---
     ('Kun.uz', 'https://kun.uz/news/rss'), ('Daryo.uz', 'https://daryo.uz/feed/'),
     ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'),
-    ('Uza.uz', 'https://uza.uz/uz/rss.php'), ('UzNews.uz', 'https://uznews.uz/uz/rss'),
-
-    # --- SPORT (Yangi + Ommabop 5 ta) ---
-    ('ESPN FC', 'https://www.espn.com/espn/rss/soccer/news'),
-    ('Sky Sports', 'https://www.skysports.com/rss/12040'),
-    ('Eurosport', 'https://www.eurosport.com/rss.xml'),
-    ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'),
-    ('Championat Asia', 'https://championat.asia/uz/news/rss'),
-
-    # --- SAN'AT VA MADANIYAT (Yangi + Ommabop 5 ta) ---
-    ('ArtNews', 'https://www.artnews.com/feed/'),
-    ('The Art Newspaper', 'https://www.theartnewspaper.com/rss'),
-    ('Culture.ru', 'https://www.culture.ru/rss'),
-    ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
-    ('Afisha.uz', 'https://www.afisha.uz/uz/rss/'),
-
-    # --- TEXNIKA VA TEXNOLOGIYA (Yangi + Ommabop 5 ta) ---
-    ('The Verge', 'https://www.theverge.com/rss/index.xml'),
-    ('Wired', 'https://www.wired.com/feed/rss'),
-    ('CNET', 'https://www.cnet.com/rss/news/'),
-    ('Gizmodo', 'https://gizmodo.com/rss'),
-    ('Terabayt.uz', 'https://www.terabayt.uz/feed'),
-
-    # --- DUNYO VA SIYOSAT (Avvalgilar) ---
-    ('CNN World', 'http://rss.cnn.com/rss/edition_world.rss'),
-    ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'),
-    ('The New York Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
-    ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
-    ('TASS News', 'https://tass.com/rss/v2.xml'),
-    ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'),
-    ('Deutsche Welle', 'https://rss.dw.com/xml/rss-en-all'),
-    ('Politico', 'https://www.politico.com/rss/politicopicks.xml')
+    ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('Uza.uz', 'https://uza.uz/uz/rss.php'),
+    ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('Zamon.uz', 'https://zamon.uz/uz/rss'),
+    ('Bugun.uz', 'https://bugun.uz/feed/'), ('Anhor.uz', 'https://anhor.uz/feed/'),
+    ('CNN', 'http://rss.cnn.com/rss/edition_world.rss'), ('NY Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
+    ('Washington Post', 'https://feeds.washingtonpost.com/rss/world'), ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'),
+    ('USA Today', 'https://www.usatoday.com/rss/world/'), ('BBC World', 'http://feeds.bbci.co.uk/news/world/rss.xml'),
+    ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Euronews', 'https://www.euronews.com/rss?level=vertical&name=news'),
+    ('DW News', 'https://rss.dw.com/xml/rss-en-all'), ('Le Monde', 'https://www.lemonde.fr/en/world/rss_full.xml'),
+    ('TASS', 'https://tass.com/rss/v2.xml'), ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'),
+    ('Kommersant', 'https://www.kommersant.ru/RSS/news.xml'), ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
+    ('Nikkei Asia', 'https://asia.nikkei.com/rss/feed/nar'), ('SCMP', 'https://www.scmp.com/rss/91/feed.xml'),
+    ('CNA Asia', 'https://www.channelnewsasia.com/rssfeeds/8395981'), ('Japan Times', 'https://www.japantimes.co.jp/feed/'),
+    ('ESPN', 'https://www.espn.com/espn/rss/soccer/news'), ('Sky Sports', 'https://www.skysports.com/rss/12040'),
+    ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Eurosport', 'https://www.eurosport.com/rss.xml'),
+    ('Championat Asia', 'https://championat.asia/uz/news/rss'), ('ArtNews', 'https://www.artnews.com/feed/'),
+    ('The Art Newspaper', 'https://www.theartnewspaper.com/rss'), ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
+    ('Culture.ru', 'https://www.culture.ru/rss'), ('Afisha.uz', 'https://www.afisha.uz/uz/rss/'),
+    ('The Verge', 'https://www.theverge.com/rss/index.xml'), ('Wired', 'https://www.wired.com/feed/rss'),
+    ('TechCrunch', 'https://techcrunch.com/feed/'), ('CNET', 'https://www.cnet.com/rss/news/'),
+    ('Gizmodo', 'https://gizmodo.com/rss'), ('Politico', 'https://www.politico.com/rss/politicopicks.xml'),
+    ('Foreign Affairs', 'https://www.foreignaffairs.com/rss.xml'), ('The Economist', 'https://www.economist.com/international/rss.xml'),
+    ('Reuters Politics', 'https://www.reutersagency.com/feed/?best-topics=politics&post_type=best'), ('Axios', 'https://www.axios.com/feeds/feed.rss')
 ]
+random.shuffle(SOURCES)
 
-# 4. RADIKAL TOZALASH
-def ultimate_clean(text, name):
+# 5. MATNNI TOZALASH VA TARJIMA
+def clean_text(text, name):
     if not text: return None
-    if any(x in name.upper() for x in ["TASS", "RIA", "RIA NOVOSTI"]):
-        text = re.sub(r'^[A-Z\s,]+.*?(\d{1,2}|TASS|RIA)\s*.*?/', '', text, flags=re.IGNORECASE)
-
-    trash_patterns = [
-        r"Если вы нашли ошибку.*", r"Ctrl\+Enter.*", r"Выделите фрагмент.*",
-        r"Подпишитесь на наш.*", r"Barcha huquqlar himoyalangan.*",
-        r"Copyright.*", r"All rights reserved.*", r"Мнение редакции может не совпадать.*"
-    ]
-    for pattern in trash_patterns:
-        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
-
-    stop_list = ['vvevya', 'kod podtverjdeniya', 'vvedite', 'parol', 'cookies', 'lotinchada', 'na russkom']
-    lines = text.split('\n')
-    cleaned_lines = [l.strip() for l in lines if len(l.strip()) > 55 and not any(s in l.lower() for s in stop_list)]
+    # Texnik axlatlarni tozalash
+    text = re.sub(r'^[A-Z\s,]+.*?(\d{1,2}|TASS|RIA|RIA NOVOSTI)\s*.*?/', '', text, flags=re.IGNORECASE)
+    trash = [r"Если вы нашли ошибку.*", r"Ctrl\+Enter.*", r"Выделиte фрагмент.*", r"©.*", r"Copyright.*", r"All rights reserved.*", r"Подпишитесь.*"]
+    for p in trash: text = re.sub(p, "", text, flags=re.IGNORECASE | re.DOTALL)
     
-    final_text = " ".join(cleaned_lines).strip()
-    return final_text[:950] if len(final_text) > 100 else None
+    lines = [l.strip() for l in text.split('\n') if len(l.strip()) > 55]
+    stop_words = ['vvedite', 'kod podtverjdeniya', 'cookies', 'nomer telefona', 'parol']
+    final_lines = [l for l in lines if not any(s in l.lower() for s in stop_list)]
+    
+    res_text = " ".join(final_lines).strip()
+    return res_text[:950] if len(res_text) > 100 else None
 
-# 5. MAJBURIY TARJIMA
-def smart_translate(text):
+def translate_to_uz(text):
     try:
-        detected = translator.detect(text).lang
-        if detected != 'uz':
+        if not text: return ""
+        detect = translator.detect(text).lang
+        if detect != 'uz':
             return translator.translate(text, dest='uz').text
         return text
     except: return text
 
-def get_content(url, name):
+# 6. KONTENTNI YUKLASH
+def fetch_content(url, name):
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=20)
-        soup = BeautifulSoup(res.content, 'html.parser')
+        r = requests.get(url, headers=headers, timeout=20)
+        soup = BeautifulSoup(r.content, 'html.parser')
         
-        # TASS uchun logo, boshqalar uchun og:image
-        if "TASS" in name.upper():
-            img_url = CHANNEL_LOGO
-        else:
-            img = soup.find("meta", property="og:image")
-            img_url = img['content'] if img else None
-
-        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form', 'button']): tag.decompose()
+        # Rasm topish
+        img_tag = soup.find("meta", property="og:image")
+        img_url = img_tag['content'] if img_tag else CHANNEL_LOGO
+        
+        # Matn topish
+        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'form', 'aside']): tag.decompose()
         paras = soup.find_all('p')
-        raw_text = "\n".join([p.get_text() for p in paras])
+        full_text = clean_text("\n".join([p.get_text() for p in paras]), name)
         
-        cleaned = ultimate_clean(raw_text, name)
-        return img_url, cleaned
-    except: return None, None
+        return img_url, full_text
+    except: return CHANNEL_LOGO, None
 
-# 6. ASOSIY ISHCHI
-def start_processing():
+# 7. TABRIKLAR TIZIMI
+def send_greetings():
+    now = datetime.now(uzb_tz)
+    hm = now.strftime("%H:%M")
+    
+    if hm == "06:00":
+        msg = "☀️ **Xayrli tong, aziz Karnay.uzb obunachilari!**\n\nYangi kun muborak bo'lsin. Bugungi rejalaringizda omad va zafarlar sizni tark etmasin. Ishlaringizda unum va baraka tilaymiz! 😊"
+        bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
+        time.sleep(65)
+    elif hm == "23:59":
+        msg = "🌙 **Xayrli tun, Karnay.uzb jamoasi!**\n\nBugungi kun ham o'z nihoyasiga yetdi. Tunningiz osuda o'tsin, ertangi kunga yangi kuch va shijoat bilan uyg'onish nasib qilsin. Yaxshi dam oling! ✨"
+        bot.send_message(CHANNEL_ID, msg, parse_mode='Markdown')
+        time.sleep(65)
+
+# 8. ASOSIY SIKL
+def start_bot():
+    init_db()
     while True:
-        random.shuffle(SOURCES) # Hammasini chalkashtirib tashlash
+        random.shuffle(SOURCES)
         for name, url in SOURCES:
+            send_greetings()
             try:
                 feed = feedparser.parse(url)
-                for entry in feed.entries[:1]:
+                # Faqat oxirgi 3 ta xabarni tekshiramiz (eng so'nggi bo'lishi uchun)
+                for entry in feed.entries[:3]:
                     if is_duplicate(entry.link): continue
                     
-                    img_url, text = get_content(entry.link, name)
+                    img, text = fetch_content(entry.link, name)
                     if not text: continue
                     
-                    title_uz = smart_translate(entry.title)
-                    text_uz = smart_translate(text)
-
-                    # TASS brendini tozalash
-                    if "TASS" in name.upper(): 
-                        title_uz = title_uz.replace("TASS:", "").strip()
+                    # Majburiy tarjima
+                    title_uz = translate_to_uz(entry.title)
+                    text_uz = translate_to_uz(text)
+                    
+                    # TASS/RIA nomini sarlavhadan tozalash
+                    title_uz = re.sub(r'^(TASS|RIA|RIA NOVOSTI):', '', title_uz, flags=re.IGNORECASE).strip()
 
                     caption = f"📢 **KARNAY.UZB**\n\n**{title_uz}**\n\n{text_uz}...\n\n✅ @karnayuzb — Dunyo sizning qo'lingizda!"
                     
                     try:
-                        if img_url:
-                            bot.send_photo(CHANNEL_ID, img_url, caption=caption, parse_mode='Markdown')
-                        else:
-                            bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
-                        
-                        log_link(entry.link)
-                        time.sleep(45) 
-                    except: continue
+                        bot.send_photo(CHANNEL_ID, img, caption=caption, parse_mode='Markdown')
+                        save_to_db(entry.link)
+                        time.sleep(45) # Spamsiz yuborish
+                    except:
+                        # Rasmda xatolik bo'lsa, logotip bilan matnni o'zini yuborish
+                        bot.send_photo(CHANNEL_ID, CHANNEL_LOGO, caption=caption, parse_mode='Markdown')
+                        save_to_db(entry.link)
+                        time.sleep(45)
             except: continue
-        time.sleep(200)
+        time.sleep(180)
 
 if __name__ == "__main__":
     keep_alive()
-    start_processing()
+    start_bot()
