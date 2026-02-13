@@ -13,10 +13,10 @@ from threading import Thread
 from datetime import datetime
 import pytz
 
-# 1. SERVER (Render uchun)
+# 1. SERVER
 app = Flask('')
 @app.route('/')
-def home(): return "Karnay.uzb Media System is Active 🚀"
+def home(): return "Karnay.uzb Media System is Perfect 🚀"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
@@ -30,14 +30,14 @@ uzb_tz = pytz.timezone('Asia/Tashkent')
 
 # 3. BAZA (SQLite)
 def init_db():
-    conn = sqlite3.connect('karnay_final.db')
+    conn = sqlite3.connect('karnay_ultimate.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)''')
     conn.commit()
     conn.close()
 
 def is_duplicate(link):
-    conn = sqlite3.connect('karnay_final.db')
+    conn = sqlite3.connect('karnay_ultimate.db')
     c = conn.cursor()
     c.execute("SELECT * FROM news WHERE link=?", (link,))
     res = c.fetchone()
@@ -45,7 +45,7 @@ def is_duplicate(link):
     return res is not None
 
 def save_news(link):
-    conn = sqlite3.connect('karnay_final.db')
+    conn = sqlite3.connect('karnay_ultimate.db')
     c = conn.cursor()
     try:
         c.execute("INSERT INTO news VALUES (?)", (link,))
@@ -81,62 +81,47 @@ SOURCES = [
     ('Reuters Politics', 'https://www.reutersagency.com/feed/?best-topics=politics&post_type=best'), ('Axios', 'https://www.axios.com/feeds/feed.rss')
 ]
 
-# 5. MATNNI BOYITISH VA TOZALASH
-def deep_clean(text):
-    if not text: return None
-    # Saytning texnik qismlarini tozalash
-    trash = [r"Если вы нашли ошибку.*", r"Ctrl\+Enter.*", r"cookies.*", r"Lotincha", r"Na russkom", r"Biz sayt.*", r"Tahririyat fikri.*", r"©.*"]
+# 5. MATNNI FILTRLASH
+def clean_and_format(text):
+    if not text: return ""
+    trash = [r"Если вы нашли ошибку.*", r"Ctrl\+Enter.*", r"cookies.*", r"Lotincha", r"Na russkom", r"Biz sayt.*", r"©.*"]
     for p in trash: text = re.sub(p, "", text, flags=re.IGNORECASE | re.DOTALL)
     
-    # Maqolani paragraflarga bo'lamiz
+    # Paragraflarni tozalash
     paragraphs = [p.strip() for p in text.split('\n') if len(p.strip()) > 60]
     
-    # Eng kamida 3 ta, ko'pi bilan 6 ta paragrafni olamiz (shunda post uzun va sifatli chiqadi)
-    if len(paragraphs) > 1:
-        return "\n\n".join(paragraphs[:6])
-    return text[:1000]
+    # Faqat mazmunli va uzun xabarlarni yig'ish (4-6 paragraf)
+    return "\n\n".join(paragraphs[:6])
 
 def smart_translate(text):
     if not text: return ""
     try:
-        # Tarjimani bir necha bor urinib ko'rish
-        for _ in range(3):
-            try:
-                detect = translator.detect(text).lang
-                if detect != 'uz':
-                    return translator.translate(text, dest='uz').text
-                return text
-            except:
-                time.sleep(1)
+        detect = translator.detect(text).lang
+        if detect != 'uz':
+            return translator.translate(text, dest='uz').text
         return text
     except: return text
 
-def get_full_content(url):
+def get_content(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
         soup = BeautifulSoup(r.content, 'html.parser')
-        
-        # Rasm
         img = soup.find("meta", property="og:image")
         img_url = img['content'] if img else CHANNEL_LOGO
-        
-        # To'liq maqola matni
-        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'form']): tag.decompose()
+        for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside']): tag.decompose()
         paras = soup.find_all('p')
         raw_text = "\n".join([p.get_text() for p in paras])
-        
-        return img_url, deep_clean(raw_text)
+        return img_url, clean_and_format(raw_text)
     except: return CHANNEL_LOGO, None
 
 # 6. TABRIKLAR
-def send_greeting():
+def send_greetings():
     now = datetime.now(uzb_tz).strftime("%H:%M")
     if now == "06:00":
-        bot.send_message(CHANNEL_ID, "☀️ **Xayrli tong, aziz Karnay.uzb obunachilari!**\n\nBugungi kuningiz a'lo kayfiyat va katta yutuqlar bilan o'tsin! 😊🚀", parse_mode='Markdown')
+        bot.send_message(CHANNEL_ID, "☀️ **Xayrli tong, aziz Karnay.uzb obunachilari!**\n\nBugungi kuningiz barakali va yangiliklarga boy bo'lsin! 😊🚀", parse_mode='Markdown')
         time.sleep(65)
     elif now == "23:59":
-        bot.send_message(CHANNEL_ID, "🌙 **Xayrli tun!**\n\nTuningiz osuda o'tsin, ertangi kunga yangi kuch bilan uyg'onishingizni tilab qolamiz! ✨", parse_mode='Markdown')
+        bot.send_message(CHANNEL_ID, "🌙 **Tuningiz osuda o'tsin!**\n\nBiz bilan bo'lganingiz uchun rahmat. Ertaga yangi va muhim xabarlar bilan uchrashguncha! ✨", parse_mode='Markdown')
         time.sleep(65)
 
 # 7. ASOSIY SIKL
@@ -145,33 +130,40 @@ def start_bot():
     while True:
         random.shuffle(SOURCES)
         for name, url in SOURCES:
-            send_greeting()
+            send_greetings()
             try:
                 feed = feedparser.parse(url)
                 for entry in feed.entries[:3]:
                     if is_duplicate(entry.link): continue
                     
-                    img, text = get_full_content(entry.link)
-                    if not text or len(text) < 100: continue
+                    img, text = get_content(entry.link)
+                    if not text or len(text) < 150: continue
                     
                     title = smart_translate(entry.title)
                     body = smart_translate(text)
-                    
-                    # Brendlarni sarlavhadan tozalash
                     title = re.sub(r'^(TASS|RIA|RIA NOVOSTI|KUN\.UZ):', '', title, flags=re.IGNORECASE).strip()
 
-                    # POSTNI SHAKLLANTIRISH (Qavslarga e'tibor berildi!)
-                    caption_text = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n{body}\n\n🔗 **Manba:** Karnay.uzb\n✅ @karnayuzb — Dunyo sizning qo'lingizda!"
+                    # MUHIM: MATNNI GAPNING OXIRIDA KESISH (GAP CHALA QOLMASLIGI UCHUN)
+                    caption_base = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n{body}\n\n🔗 **Manba:** Karnay.uzb\n✅ @karnayuzb"
                     
-                    if len(caption_text) > 1024:
-                        caption_text = caption_text[:1020] + "..."
+                    if len(caption_base) > 1024:
+                        # 1000 belgidan keyingi birinchi nuqtani topamiz va o'sha yerda kesamiz
+                        short_body = body[:800]
+                        last_dot = short_body.rfind('.')
+                        if last_dot != -1:
+                            body = body[:last_dot + 1]
+                        else:
+                            body = body[:750]
+                        
+                        # Qayta shakllantirish (oxirida nuqtalarsiz!)
+                        caption_base = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n{body}\n\n🔗 **Manba:** Karnay.uzb\n✅ @karnayuzb"
 
                     try:
-                        bot.send_photo(CHANNEL_ID, img, caption=caption_text, parse_mode='Markdown')
+                        bot.send_photo(CHANNEL_ID, img, caption=caption_base, parse_mode='Markdown')
                         save_news(entry.link)
                         time.sleep(50)
                     except:
-                        bot.send_photo(CHANNEL_ID, CHANNEL_LOGO, caption=caption_text, parse_mode='Markdown')
+                        bot.send_photo(CHANNEL_ID, CHANNEL_LOGO, caption=caption_base, parse_mode='Markdown')
                         save_news(entry.link)
                         time.sleep(50)
             except: continue
