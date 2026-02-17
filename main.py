@@ -14,7 +14,7 @@ import pytz
 # 1. SERVER & SETTINGS
 app = Flask('')
 @app.route('/')
-def home(): return "Karnay.uzb v9.0 - 48 Sources Active 🚀"
+def home(): return "Karnay.uzb v10.1 - Max Text & 48 Sources Active 🚀"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
@@ -24,7 +24,6 @@ CHANNEL_LOGO = "https://i.postimg.cc/mD8zYpXG/Karnay-uzb.jpg"
 bot = telebot.TeleBot(TOKEN)
 translator = Translator()
 uzb_tz = pytz.timezone('Asia/Tashkent')
-
 STANDARD_FINISH = "✨ Bilim va yangiliklar maskani — Biz bilan bo'lganingiz uchun rahmat!"
 
 # 2. HALOL FILTR
@@ -35,56 +34,65 @@ def is_halal(text):
     text = text.lower()
     return not any(word in text for word in HAROM_WORDS)
 
-# 3. MANBALAR RO'YXATI (TO'LIQ 48 TA)
+# 3. MAKSIMAL MATN TAYYORLASH (Limit: 980 belgi)
+def get_max_caption(title, body, source_name):
+    prefix = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n"
+    suffix = f"\n\n🔗 **Manba:** {source_name}\n✅ @karnayuzb\n\n{STANDARD_FINISH}"
+    
+    # Telegram 1024 belgi ruxsat beradi, biz 980 da to'xtaymiz (xavfsizlik uchun)
+    allowed_body_len = 980 - len(prefix) - len(suffix)
+    
+    if len(body) > allowed_body_len:
+        body = body[:allowed_body_len]
+        # Matnni chala qoldirmay, oxirgi nuqtadan kesish
+        last_punc = max(body.rfind('.'), body.rfind('!'), body.rfind('?'))
+        if last_punc > (allowed_body_len * 0.7):
+            body = body[:last_punc+1]
+            
+    return f"{prefix}{body}{suffix}"
+
+# 4. MANBALAR (TO'LIQ 48 TA)
 SOURCES = [
-    # O'zbekiston (10)
-    ('Kun.uz', 'https://kun.uz/news/rss'), ('Daryo.uz', 'https://daryo.uz/feed/'), 
-    ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'),
-    ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('Uza.uz', 'https://uza.uz/uz/rss.php'),
-    ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('Zamon.uz', 'https://zamon.uz/uz/rss'),
-    ('Bugun.uz', 'https://bugun.uz/feed/'), ('Anhor.uz', 'https://anhor.uz/feed/'),
-    # Jahon (15)
-    ('CNN World', 'http://rss.cnn.com/rss/edition_world.rss'), ('NY Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'),
-    ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'), ('The Guardian', 'https://www.theguardian.com/world/rss'),
-    ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'), ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
-    ('Euronews', 'https://www.euronews.com/rss?level=vertical&name=news'), ('DW News', 'https://rss.dw.com/xml/rss-en-all'),
-    ('Washington Post', 'https://feeds.washingtonpost.com/rss/world'), ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'),
-    ('TASS', 'https://tass.com/rss/v2.xml'), ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'),
-    ('RT News', 'https://www.rt.com/rss/news/'), ('The Independent', 'https://www.independent.co.uk/news/world/rss'),
-    ('France24', 'https://www.france24.com/en/rss'),
-    # Texno & Fan (13)
-    ('The Verge', 'https://www.theverge.com/rss/index.xml'), ('TechCrunch', 'https://techcrunch.com/feed/'),
-    ('Wired', 'https://www.wired.com/feed/rss'), ('Engadget', 'https://www.engadget.com/rss.xml'),
-    ('CNET', 'https://www.cnet.com/rss/news/'), ('Terabayt.uz', 'https://www.terabayt.uz/feed'),
-    ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), ('Nature', 'https://www.nature.com/nature.rss'),
-    ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'), ('Space.com', 'https://www.space.com/feeds/all'),
-    ('Scientific American', 'https://www.scientificamerican.com/section/news/rss/'), ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
-    ('Lifehacker', 'https://lifehacker.com/rss'),
-    # Sport & Biznes (10)
-    ('Sky Sports', 'https://www.skysports.com/rss/12040'), ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'),
-    ('Championat.asia', 'https://championat.asia/uz/news/rss'), ('Goal.com', 'https://www.goal.com/en/feeds/news'),
-    ('Sports.uz', 'https://sports.uz/rss'), ('Forbes', 'https://www.forbes.com/news/feed/'),
-    ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('The Economist', 'https://www.economist.com/international/rss.xml'),
-    ('Harvard Business', 'https://hbr.org/rss/all.xml'), ('Fast Company', 'https://www.fastcompany.com/latest/rss')
+    ('Kun.uz', 'https://kun.uz/news/rss'), ('Daryo.uz', 'https://daryo.uz/feed/'), ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), 
+    ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('Uza.uz', 'https://uza.uz/uz/rss.php'), 
+    ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('Zamon.uz', 'https://zamon.uz/uz/rss'), ('Bugun.uz', 'https://bugun.uz/feed/'), 
+    ('Anhor.uz', 'https://anhor.uz/feed/'), ('CNN World', 'http://rss.cnn.com/rss/edition_world.rss'), 
+    ('NY Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'), ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'), 
+    ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'), 
+    ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'), ('Euronews', 'https://www.euronews.com/rss?level=vertical&name=news'), 
+    ('DW News', 'https://rss.dw.com/xml/rss-en-all'), ('Washington Post', 'https://feeds.washingtonpost.com/rss/world'), 
+    ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), ('TASS', 'https://tass.com/rss/v2.xml'), 
+    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'), ('The Verge', 'https://www.theverge.com/rss/index.xml'), 
+    ('TechCrunch', 'https://techcrunch.com/feed/'), ('Wired', 'https://www.wired.com/feed/rss'), 
+    ('Engadget', 'https://www.engadget.com/rss.xml'), ('CNET', 'https://www.cnet.com/rss/news/'), 
+    ('Terabayt.uz', 'https://www.terabayt.uz/feed'), ('Sky Sports', 'https://www.skysports.com/rss/12040'), 
+    ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
+    ('Goal.com', 'https://www.goal.com/en/feeds/news'), ('Sports.uz', 'https://sports.uz/rss'), 
+    ('The Economist', 'https://www.economist.com/international/rss.xml'), ('Forbes', 'https://www.forbes.com/news/feed/'), 
+    ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), 
+    ('Nature', 'https://www.nature.com/nature.rss'), ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'),
+    ('Scientific American', 'https://www.scientificamerican.com/section/news/rss/'), ('Space.com', 'https://www.space.com/feeds/all'),
+    ('History.com', 'https://www.history.com/.rss/full/all'), ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
+    ('Harvard Business', 'https://hbr.org/rss/all.xml'), ('Fast Company', 'https://www.fastcompany.com/latest/rss'),
+    ('Rolling Stone', 'https://www.rollingstone.com/feed/'), ('Lifehacker', 'https://lifehacker.com/rss'), ('The Independent', 'https://www.independent.co.uk/news/world/rss')
 ]
 
-# 4. FUNKSIYALAR
-def get_clean_caption(title, body, source_name):
-    clean_body = body.strip()
-    if len(clean_body) > 750:
-        clean_body = clean_body[:750]
-        last_punc = max(clean_body.rfind('.'), clean_body.rfind('!'), clean_body.rfind('?'))
-        if last_punc != -1: clean_body = clean_body[:last_punc+1]
-    return f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n{clean_body}\n\n🔗 **Manba:** {source_name}\n✅ @karnayuzb\n\n{STANDARD_FINISH}"
-
+# 5. BANK KURSLARI (14 TA)
 def get_bank_rates():
     try:
         res = requests.get("https://nbu.uz/uz/exchange-rates/json/").json()
         usd = [c for c in res if c['code'] == 'USD'][0]['cb_price']
-        banks = [f"🏛 **MB:** {usd}", "🔹 **NBU:** 12 860/12 950", "🔹 **Kapital:** 12 870/12 960", "🔹 **Hamkor:** 12 860/12 945", "🔹 **Ipak Yo'li:** 12 880/12 960", "🔹 **Agro:** 12 850/12 940", "🔹 **Xalq:** 12 860/12 950", "🔹 **Aloqa:** 12 870/12 955", "🔹 **Turon:** 12 865/12 950", "🔹 **SQB:** 12 870/12 960", "🔹 **Asaka:** 12 860/12 950", "🔹 **Orient:** 12 880/12 965", "🔹 **Mikro:** 12 855/12 945", "🔹 **Infin:** 12 875/12 960"]
-        return "🏦 **DOLLAR KURSI (10:30):**\n\n" + "\n".join(banks)
+        banks = [
+            f"🏛 **MB kursi:** {usd}", "🔹 **NBU:** 12 860 / 12 950", "🔹 **Kapital:** 12 870 / 12 960", 
+            "🔹 **Hamkor:** 12 860 / 12 945", "🔹 **Ipak Yo'li:** 12 880 / 12 960", "🔹 **Agro:** 12 850 / 12 940", 
+            "🔹 **Xalq:** 12 860 / 12 950", "🔹 **Aloqa:** 12 870 / 12 955", "🔹 **Turon:** 12 865 / 12 950", 
+            "🔹 **SQB:** 12 870 / 12 960", "🔹 **Asaka:** 12 860 / 12 950", "🔹 **Orient:** 12 880 / 12 965", 
+            "🔹 **Mikro:** 12 855 / 12 945", "🔹 **Infin:** 12 875 / 12 960"
+        ]
+        return "🏦 **BANKLARDA DOLLAR KURSI (10:30):**\n\n" + "\n".join(banks)
     except: return "🏦 Kurslar yangilanmoqda..."
 
+# 6. VIKTORINA VA REJA
 def send_random_quiz():
     try:
         res = requests.get("https://opentdb.com/api.php?amount=1&type=multiple", timeout=10).json()
@@ -96,7 +104,6 @@ def send_random_quiz():
         bot.send_poll(CHANNEL_ID, f"🧠 KUN VIKTORINASI:\n\n{q_uz}", opts_uz, is_anonymous=True, type='quiz', correct_option_id=opts_uz.index(c_uz))
     except: pass
 
-# 5. ASOSIY ISHCHI LOGIKA
 def run_scheduler():
     l_m, l_b, l_q, l_n = "", "", "", ""
     while True:
@@ -112,6 +119,7 @@ def run_scheduler():
             bot.send_message(CHANNEL_ID, f"🌙 **XAYRLI TUN!**\n✅ @karnayuzb\n\n{STANDARD_FINISH}"); l_n = day
         time.sleep(30)
 
+# 7. YANGILIKLAR LOOP
 def start_news_loop():
     conn = sqlite3.connect('karnay_final.db'); c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)'); conn.close()
@@ -121,12 +129,10 @@ def start_news_loop():
             try:
                 feed = feedparser.parse(url)
                 for entry in feed.entries[:5]:
-                    # 24 SOATLIK FILTR
-                    pub_time = entry.get('published_parsed') or entry.get('updated_parsed')
-                    if pub_time:
-                        if datetime.now(pytz.utc) - datetime.fromtimestamp(time.mktime(pub_time), pytz.utc) > timedelta(hours=24): continue
+                    pub_t = entry.get('published_parsed') or entry.get('updated_parsed')
+                    if pub_t:
+                        if datetime.now(pytz.utc) - datetime.fromtimestamp(time.mktime(pub_t), pytz.utc) > timedelta(hours=24): continue
                     
-                    # TAKRORLANMASLIK (DB)
                     conn = sqlite3.connect('karnay_final.db'); cur = conn.cursor()
                     cur.execute("SELECT * FROM news WHERE link=?", (entry.link,))
                     if cur.fetchone(): conn.close(); continue
@@ -139,10 +145,10 @@ def start_news_loop():
                     text = " ".join([p.get_text() for p in soup.find_all('p') if len(p.get_text()) > 40])
                     if not is_halal(entry.title + text): conn.close(); continue
                     
-                    title_uz = translator.translate(entry.title, dest='uz').text
-                    body_uz = translator.translate(text[:900], dest='uz').text
+                    t_uz = translator.translate(entry.title, dest='uz').text
+                    b_uz = translator.translate(text[:1200], dest='uz').text 
                     
-                    bot.send_photo(CHANNEL_ID, img_url, caption=get_clean_caption(title_uz, body_uz, name), parse_mode='Markdown')
+                    bot.send_photo(CHANNEL_ID, img_url, caption=get_max_caption(t_uz, b_uz, name), parse_mode='Markdown')
                     cur.execute("INSERT INTO news VALUES (?)", (entry.link,))
                     conn.commit(); conn.close()
                     time.sleep(180)
