@@ -53,28 +53,27 @@ def get_max_caption(title, body, source_name):
 
 # 4. MANBALAR (TO'LIQ 48 TA)
 SOURCES = [
-    ('Kun.uz', 'https://kun.uz/news/rss'), ('Daryo.uz', 'https://daryo.uz/feed/'), ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), 
+    ('Daryo.uz', 'https://daryo.uz/feed/'), ('Qalampir.uz', 'https://qalampir.uz/uz/rss'), 
     ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'), ('Uza.uz', 'https://uza.uz/uz/rss.php'), 
     ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('Zamon.uz', 'https://zamon.uz/uz/rss'), ('Bugun.uz', 'https://bugun.uz/feed/'), 
     ('Anhor.uz', 'https://anhor.uz/feed/'), ('CNN World', 'http://rss.cnn.com/rss/edition_world.rss'), 
     ('NY Times', 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml'), ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'), 
     ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'), 
-    ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'), ('Euronews', 'https://www.euronews.com/rss?level=vertical&name=news'), 
+    ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
     ('DW News', 'https://rss.dw.com/xml/rss-en-all'), ('Washington Post', 'https://feeds.washingtonpost.com/rss/world'), 
     ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), ('TASS', 'https://tass.com/rss/v2.xml'), 
-    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'), ('The Verge', 'https://www.theverge.com/rss/index.xml'), 
+    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'),
     ('TechCrunch', 'https://techcrunch.com/feed/'), ('Wired', 'https://www.wired.com/feed/rss'), 
-    ('Engadget', 'https://www.engadget.com/rss.xml'), ('CNET', 'https://www.cnet.com/rss/news/'), 
     ('Terabayt.uz', 'https://www.terabayt.uz/feed'), ('Sky Sports', 'https://www.skysports.com/rss/12040'), 
     ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
     ('Goal.com', 'https://www.goal.com/en/feeds/news'), ('Sports.uz', 'https://sports.uz/rss'), 
     ('The Economist', 'https://www.economist.com/international/rss.xml'), ('Forbes', 'https://www.forbes.com/news/feed/'), 
     ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), 
     ('Nature', 'https://www.nature.com/nature.rss'), ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'),
-    ('Scientific American', 'https://www.scientificamerican.com/section/news/rss/'), ('Space.com', 'https://www.space.com/feeds/all'),
+    ('Scientific American', 'https://www.scientificamerican.com/section/news/rss/'),
     ('History.com', 'https://www.history.com/.rss/full/all'), ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
     ('Harvard Business', 'https://hbr.org/rss/all.xml'), ('Fast Company', 'https://www.fastcompany.com/latest/rss'),
-    ('Rolling Stone', 'https://www.rollingstone.com/feed/'), ('Lifehacker', 'https://lifehacker.com/rss'), ('The Independent', 'https://www.independent.co.uk/news/world/rss')
+    ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
 ]
 
 # 5. BANK KURSLARI (14 TA)
