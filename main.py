@@ -107,18 +107,12 @@ def send_random_quiz():
     except: pass
 
 def run_scheduler():
-    l_m, l_b, l_q, l_n = "", "", "", ""
+    l_q, = ""
     while True:
         now = datetime.now(uzb_tz)
         cur, day = now.strftime("%H:%M"), now.strftime("%Y-%m-%d")
-        if cur == "06:00" and l_m != day:
-            bot.send_message(CHANNEL_ID, f"☀️ **XAYRLI TONG!**\n\n📅 Bugun: {day}\n🌟 Kuningiz unumli o'tsin!\n✅ @karnayuzb\n\n{STANDARD_FINISH}"); l_m = day
-        if cur == "10:30" and l_b != day:
-            bot.send_message(CHANNEL_ID, get_bank_rates(), parse_mode='Markdown'); l_b = day
-        if cur == "15:00" and l_q != day:
-            send_random_quiz(); l_q = day
-        if cur == "23:59" and l_n != day:
-            bot.send_message(CHANNEL_ID, f"🌙 **XAYRLI TUN!**\n✅ @karnayuzb\n\n{STANDARD_FINISH}"); l_n = day
+        if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
+            send_random_quiz(); l_q = (day + cur) 
         time.sleep(30)
 
 # 7. YANGILIKLAR LOOP
