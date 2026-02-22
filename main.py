@@ -91,16 +91,49 @@ def send_random_quiz():
         bot.send_poll(CHANNEL_ID, f"🧠 KUN VIKTORINASI:\n\n{q_uz}", opts_uz, is_anonymous=True, type='quiz', correct_option_id=opts_uz.index(c_uz))
     except: pass
 
+# 6. VIKTORINA VA REJA
+def send_random_quiz():
+    try:
+        # Viktorina savolini olish
+        res = requests.get("https://opentdb.com/api.php?amount=1&type=multiple", timeout=10).json()
+        q = res['results'][0]
+        
+        # Inglizcha belgilarni tozalash va tarjima qilish (agar translator bo'lsa)
+        question = q['question'].replace("&quot;", "'").replace("&#039;", "'")
+        correct_answer = q['correct_answer']
+        options = q['incorrect_answers'] + [correct_answer]
+        random.shuffle(options)
+        
+        bot.send_poll(
+            CHANNEL_ID, 
+            f"🧠 KUN VIKTORINASI:\n\n{question}", 
+            options, 
+            is_anonymous=True, 
+            type='quiz', 
+            correct_option_id=options.index(correct_answer)
+        )
+    except Exception as e:
+        print(f"Viktorina xatosi: {e}")
+
 def run_scheduler():
-    l_q = ""
+    l_q = ""  # l_q, = "" dagi vergul olib tashlandi
     while True:
         try:
             now = datetime.now(uzb_tz)
-            cur, day = now.strftime("%H:%M"), now.strftime("%Y-%m-%d")
-            if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
-                send_random_quiz(); l_q = (day + cur) 
-        time.sleep(30)
-    except Exception as e:
+            cur = now.strftime("%H:%M")
+            day = now.strftime("%Y-%m-%d")
+            
+            # Soat 10:00, 15:00 va 21:00 da viktorina yuborish
+            if cur in ["10:00", "15:00", "21:00"] and l_q != (day + cur):
+                send_random_quiz()
+                l_q = (day + cur)
+            
+            time.sleep(30) # time.sleep(30). dagi nuqta olib tashlandi
+        except Exception as e:
+            # Mana shu 'except' bloki Render terminalidagi xatoni to'g'rilaydi
+            print(f"Scheduler xatosi: {e}")
+            time.sleep(10)
+
         print(f"Xatolik: {e}") 
         time.sleep(10)
 # 7. YANGILIKLAR LOOP
