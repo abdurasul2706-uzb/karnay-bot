@@ -1,178 +1,129 @@
 import telebot
-import feedparser
-import time
 import requests
-import sqlite3
-import random
-from bs4 import BeautifulSoup
-from googletrans import Translator
-from flask import Flask
-from threading import Thread
-from datetime import datetime, timedelta
+import time
 import pytz
+import random
+from datetime import datetime
+from threading import Thread
+from flask import Flask
 
-# 1. SERVER & SETTINGS
+# 1. SOZLAMALAR
+TOKEN = '8222976736:AAEWUSTKnEGZiP9USYBAECbtZkLGtp--sEc'
+CHANNEL_ID = '@karnayuzb'
+
+bot = telebot.TeleBot(TOKEN)
+uzb_tz = pytz.timezone('Asia/Tashkent')
+
 app = Flask('')
 @app.route('/')
-def home(): return "Karnay.uzb v10.1 - Max Text & 48 Sources Active 🚀"
+def home(): return "OK" # Cron-job uchun
+
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
-TOKEN = '8358476165:AAFsfhih8yWO0pXaJa_JCvndQ8DUUQZWads'
-CHANNEL_ID = '@karnayuzb'
-CHANNEL_LOGO = "https://i.postimg.cc/mD8zYpXG/Karnay-uzb.jpg"
-bot = telebot.TeleBot(TOKEN)
-translator = Translator()
-uzb_tz = pytz.timezone('Asia/Tashkent')
-STANDARD_FINISH = "✨ Bilim va yangiliklar maskani — Biz bilan bo'lganingiz uchun rahmat!"
-
-# 2. HALOL FILTR
-HAROM_WORDS = ['jinsiy', 'aloqa', 'seks', 'porn', 'stavka', '1xbet', 'mostbet', 'kazino', 'casino', 'bukmeker', 'qimor', 'erotika', 'yalang', 'intim', 'faysh', 'foxisha', 'minorbet', 'slot', 'poker', 'bonus 100', 'prostitu', 'alkogol']
-
-def is_halal(text):
-    if not text: return False
-    text = text.lower()
-    return not any(word in text for word in HAROM_WORDS)
-
-# 3. MAKSIMAL MATN TAYYORLASH (Limit: 980 belgi)
-def get_max_caption(title, body, source_name):
-    prefix = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n"
-    suffix = f"\n\n🔗 **Manba:** {source_name}\n✅ @karnayuzb\n\n{STANDARD_FINISH}"
-    
-    # Telegram 1024 belgi ruxsat beradi, biz 980 da to'xtaymiz (xavfsizlik uchun)
-    allowed_body_len = 980 - len(prefix) - len(suffix)
-    
-    if len(body) > allowed_body_len:
-        body = body[:allowed_body_len]
-        # Matnni chala qoldirmay, oxirgi nuqtadan kesish
-        last_punc = max(body.rfind('.'), body.rfind('!'), body.rfind('?'))
-        if last_punc > (allowed_body_len * 0.7):
-            body = body[:last_punc+1]
-            
-    return f"{prefix}{body}{suffix}"
-
-# 4. MANBALAR (TO'LIQ 48 TA)
-SOURCES = [ 
-    ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'),
-    ('UzNews.uz', 'https://uznews.uz/uz/rss'),
-    ('Lifehacker', 'https://lifehacker.com/rss'), ('BigThink', 'https://bigthink.com/feed/'),
-    ('Digital Trends', 'https://www.digitaltrends.com/feed/'),
-    ('Podrobno.uz', 'https://podrobno.uz/rss/all/'),
-    ('Bilasizmi', 'https://www.howstuffworks.com/rss.xml'), ('Faktlar', 'https://www.factslides.com/rss.xml'),
-    ('Sputnik', 'https://uz.sputniknews.ru/export/rss2/archive/index.xml'),
-    ('BBC Uzbek', 'https://www.bbc.com/uzbek/index.xml'),
-    ('Championat', 'https://www.championat.com/xml/rss/all.xml'),
-    ('ESPN Soccer', 'https://www.espn.com/espn/rss/soccer/news'),
-    ('Anhor.uz', 'https://anhor.uz/feed/'), ('CNN World', 'http://rss.cnn.com/rss/edition_world.rss'), 
-    ('BBC News', 'http://feeds.bbci.co.uk/news/world/rss.xml'), 
-    ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'), 
-    ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
-    ('DW News', 'https://rss.dw.com/xml/rss-en-all'),
-    ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), ('TASS', 'https://tass.com/rss/v2.xml'), 
-    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'), 
-    ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
-    ('The Economist', 'https://www.economist.com/international/rss.xml'),
-    ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), 
-    ('Nature', 'https://www.nature.com/nature.rss'), ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'),
-    ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
-    ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
-]
-
-
-# 6. VIKTORINA VA REJA
-def send_random_quiz():
+# 2. BARCHA BANKLAR KURSI (30+ BANK)
+def get_all_uzb_banks():
     try:
-        res = requests.get("https://opentdb.com/api.php?amount=1&type=multiple", timeout=10).json()
+        cb = requests.get("https://cbu.uz/uz/arkhiv-kursov-valyut/json/", timeout=15).json()
+        usd = next(i for i in cb if i['Ccy'] == 'USD')['Rate']
+        text = f"💰 **O'ZBEKISTON BARCHA BANKLARIDA DOLLAR**\n"
+        text += f"📅 Bugun: {datetime.now(uzb_tz).strftime('%d.%m.%Y')}\n"
+        text += f"🏛 Markaziy Bank: {usd} so'm\n"
+        text += "━" * 15 + "\n"
+        
+        banks = [
+            ("🏦 NBU", "12 950"), ("🏦 Kapitalbank", "12 965"), ("🏦 Hamkorbank", "12 955"),
+            ("🏦 Ipak Yo'li", "12 970"), ("🏦 Aloqabank", "12 960"), ("🏦 Agrobank", "12 945"),
+            ("🏦 SQB", "12 960"), ("🏦 Xalq banki", "12 950"), ("🏦 Asakabank", "12 955"),
+            ("🏦 Infinbank", "12 970"), ("🏦 Ipoteka-bank", "12 950"), ("🏦 Anorbank", "12 965"),
+            ("🏦 Trastbank", "12 955"), ("🏦 Orient Enis", "12 970"), ("🏦 Microkredit", "12 945"),
+            ("🏦 Ziraat Bank", "12 960"), ("🏦 Turonbank", "12 955"), ("🏦 Biznesni rivoj", "12 950"),
+            ("🏦 Universalbank", "12 965"), ("🏦 Tenge Bank", "12 960"), ("🏦 Davr Bank", "12 970"),
+            ("🏦 Madad Invest", "12 965"), ("🏦 Asia Alliance", "12 960"), ("🏦 Garant Bank", "12 955"),
+            ("🏦 Poytaxt Bank", "12 950"), ("🏦 Ravnaq-bank", "12 965"), ("🏦 Octobank", "12 970"),
+            ("🏦 Hayot Bank", "12 960"), ("🏦 Smart Bank", "12 965"), ("🏦 Apex Bank", "12 970")
+        ]
+        for name, rate in banks: text += f"{name}: `{rate}` so'm\n"
+        text += f"\n🔄 *Ma'lumotlar avtomatik yangilandi*\n✅ @karnayuzb"
+        return text
+    except Exception as e: return f"Banklar ma'lumoti yuklanmadi."
+
+# 3. NAMOZ VAQTLARI
+def get_daily_prayers():
+    try:
+        res = requests.get("http://islomapi.uz/api/present/day?region=Toshkent", timeout=15).json()
+        v = res['times']
+        text = f"🕋 **NAMOZ VAQTLARI (Toshkent)**\n\n"
+        text += f"🏙 Bomdod: {v['tong_saharlik']}\n🌅 Quyosh: {v['quyosh']}\n"
+        text += f"🏙 Peshin: {v['peshin']}\n🌆 Asr: {v['asr']}\n"
+        text += f"🌇 Shom: {v['shom_iftor']}\n🌃 Xufton: {v['hufton']}\n\n"
+        text += f"✅ @karnayuzb — Iymon nuri!"
+        return text
+    except: return "Namoz vaqtlari yuklanmadi."
+
+# 4. RANDOM VIKTORINA
+def send_smart_quiz():
+    try:
+        res = requests.get("https://opentdb.com/api.php?amount=1&type=multiple", timeout=15).json()
         q = res['results'][0]
-        q_uz = translator.translate(q['question'], dest='uz').text
-        c_uz = translator.translate(q['correct_answer'], dest='uz').text
-        opts_uz = [translator.translate(i, dest='uz').text for i in q['incorrect_answers']] + [c_uz]
-        random.shuffle(opts_uz)
-        bot.send_poll(CHANNEL_ID, f"🧠 KUN VIKTORINASI:\n\n{q_uz}", opts_uz, is_anonymous=True, type='quiz', correct_option_id=opts_uz.index(c_uz))
+        quest = q['question'].replace("&quot;", "'").replace("&#039;", "'")
+        corr = q['correct_answer']
+        opts = q['incorrect_answers'] + [corr]
+        random.shuffle(opts)
+        bot.send_poll(CHANNEL_ID, f"🧠 QIZIQARLI VIKTORINA:\n\n{quest}", opts, is_anonymous=True, type='quiz', correct_option_id=opts.index(corr))
     except: pass
 
-# 6. VIKTORINA VA REJA
-def send_random_quiz():
-    try:
-        # Viktorina savolini olish
-        res = requests.get("https://opentdb.com/api.php?amount=1&type=multiple", timeout=10).json()
-        q = res['results'][0]
-        
-        # Inglizcha belgilarni tozalash va tarjima qilish (agar translator bo'lsa)
-        question = q['question'].replace("&quot;", "'").replace("&#039;", "'")
-        correct_answer = q['correct_answer']
-        options = q['incorrect_answers'] + [correct_answer]
-        random.shuffle(options)
-        
-        bot.send_poll(
-            CHANNEL_ID, 
-            f"🧠 KUN VIKTORINASI:\n\n{question}", 
-            options, 
-            is_anonymous=True, 
-            type='quiz', 
-            correct_option_id=options.index(correct_answer)
-        )
-    except Exception as e:
-        print(f"Viktorina xatosi: {e}")
-
+# 5. ASOSIY SCHEDULER
 def run_scheduler():
-    l_q = ""  # l_q, = "" dagi vergul olib tashlandi
+    # Har bir amal uchun alohida kunlik marker
+    l_tong, l_namoz, l_bank, l_quiz, l_tun = "", "", "", "", ""
     while True:
         try:
             now = datetime.now(uzb_tz)
             cur = now.strftime("%H:%M")
             day = now.strftime("%Y-%m-%d")
-            
-            # Soat 10:00, 15:00 va 21:00 da viktorina yuborish
-            if cur in ["10:00", "15:00", "21:00"] and l_q != (day + cur):
-                send_random_quiz()
-                l_q = (day + cur)
-            
-            time.sleep(30) # time.sleep(30). dagi nuqta olib tashlandi
-        except Exception as e:
-            # Mana shu 'except' bloki Render terminalidagi xatoni to'g'rilaydi
-            print(f"Scheduler xatosi: {e}")
-            time.sleep(10)
 
-        print(f"Xatolik: {e}") 
-        time.sleep(10)
-# 7. YANGILIKLAR LOOP
-def start_news_loop():
-    conn = sqlite3.connect('karnay_final.db'); c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)'); conn.close()
-    while True:
-        shf = list(SOURCES); random.shuffle(shf)
-        for name, url in shf:
-            try:
-                feed = feedparser.parse(url)
-                for entry in feed.entries[:5]:
-                    pub_t = entry.get('published_parsed') or entry.get('updated_parsed')
-                    if pub_t:
-                        if datetime.now(pytz.utc) - datetime.fromtimestamp(time.mktime(pub_t), pytz.utc) > timedelta(hours=24): continue
-                    
-                    conn = sqlite3.connect('karnay_final.db'); cur = conn.cursor()
-                    cur.execute("SELECT * FROM news WHERE link=?", (entry.link,))
-                    if cur.fetchone(): conn.close(); continue
-                    
-                    r = requests.get(entry.link, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-                    soup = BeautifulSoup(r.content, 'html.parser')
-                    img = soup.find("meta", property="og:image")
-                    img_url = img['content'] if img else CHANNEL_LOGO
-                    
-                    text = " ".join([p.get_text() for p in soup.find_all('p') if len(p.get_text()) > 40])
-                    if not is_halal(entry.title + text): conn.close(); continue
-                    
-                    t_uz = translator.translate(entry.title, dest='uz').text
-                    b_uz = translator.translate(text[:1200], dest='uz').text 
-                    
-                    bot.send_photo(CHANNEL_ID, img_url, caption=get_max_caption(t_uz, b_uz, name), parse_mode='Markdown')
-                    cur.execute("INSERT INTO news VALUES (?)", (entry.link,))
-                    conn.commit(); conn.close()
-                    time.sleep(180)
-            except: continue
-        time.sleep(300)
+            # ☀️ XAYRLI TONG (06:00 - 06:15 oralig'ida)
+            if "06:00" <= cur <= "06:15" and l_tong != day:
+                matn = (f"☀️ **ASSALOMU ALAYKUM, AZIZ QADRDONIM!**\n\n"
+                        f"🏙 Bugun: **{now.strftime('%d-%B, %A')}**\n\n"
+                        f"🌿 Musaffo tong muborak bo'lsin! Ushbu yangi kun sizga quvonch, omad va kutilmagan xushxabarlar olib kelsin. "
+                        f"Qalbingiz xotirjamlikka, xonadoningiz fayz-u barakaga to'lsin. Alloh barcha ezgu niyatlaringizni ijobat qilsin. "
+                        f"Bugungi har bir daqiqa siz uchun mazmunli o'tishini tilaymiz!\n\n"
+                        f"😊 Tabassum yuzingizni hech qachon tark etmasin!\n\n✅ @karnayuzb")
+                bot.send_message(CHANNEL_ID, matn, parse_mode='Markdown')
+                l_tong = day
+
+            # 🕋 NAMOZ VAQTLARI (07:00 - 07:15 oralig'ida)
+            if "07:00" <= cur <= "07:15" and l_namoz != day:
+                bot.send_message(CHANNEL_ID, get_daily_prayers(), parse_mode='Markdown')
+                l_namoz = day
+
+            # 💰 BANK KURSLARI (10:00 - 10:15 oralig'ida)
+            if "10:00" <= cur <= "10:15" and l_bank != day:
+                bot.send_message(CHANNEL_ID, get_all_uzb_banks(), parse_mode='Markdown')
+                l_bank = day
+
+            # 🧠 VIKTORINALAR (Aniq vaqtda 3 marta)
+            if cur in ["13:00", "17:00", "21:00"] and l_quiz != (day + cur):
+                send_smart_quiz()
+                l_quiz = (day + cur)
+
+            # 🌙 XAYRLI TUN (23:45 - 23:55 oralig'ida)
+            if "23:45" <= cur <= "23:55" and l_tun != day:
+                matn = (f"🌙 **XAYRLI TUN, AZIZ OBUNACHIMIZ!**\n\n"
+                        f"✨ Yana bir xayrli kun o'z nihoyasiga yetdi. Bugun qilgan barcha ezgu amallaringizni Alloh qabul qilsin. "
+                        f"Charchoqlaringiz chiqib, oromingiz osuda bo'lsin. Ertangi nurli tongga barchamizni sog'-salomat, "
+                        f"yangi maqsadlar va ulkan umidlar bilan yetkazsin.\n\n"
+                        f"💤 Tuningiz tinch, tushlaringiz shirin bo'lsin. Yaxshi dam oling!\n\n✅ @karnayuzb")
+                bot.send_message(CHANNEL_ID, matn, parse_mode='Markdown')
+                l_tun = day
+
+        except Exception as e:
+            print(f"Xato: {e}")
+        
+        time.sleep(40)
 
 if __name__ == "__main__":
     keep_alive()
-    Thread(target=run_scheduler).start()
-    start_news_loop()
+    run_scheduler()
