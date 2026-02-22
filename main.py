@@ -56,7 +56,7 @@ SOURCES = [
     ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'),
     ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('AdMe', 'https://www.adme.ru/rss/'),
     ('Lifehacker', 'https://lifehacker.com/rss'), ('BigThink', 'https://bigthink.com/feed/'),
-    ('Digital Trends', 'https://www.digitaltrends.com/feed/'), ('PopSci', 'https://www.popsci.com/feed/')
+    ('Digital Trends', 'https://www.digitaltrends.com/feed/'), ('PopSci', 'https://www.popsci.com/feed/'), 
     ('Podrobno.uz', 'https://podrobno.uz/rss/all/'),
     ('Sputnik', 'https://uz.sputniknews.ru/export/rss2/archive/index.xml'),
     ('BBC Uzbek', 'https://www.bbc.com/uzbek/index.xml'),
