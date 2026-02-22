@@ -78,20 +78,6 @@ SOURCES = [
     ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
 ]
 
-# 5. BANK KURSLARI (14 TA)
-def get_bank_rates():
-    try:
-        res = requests.get("https://nbu.uz/uz/exchange-rates/json/").json()
-        usd = [c for c in res if c['code'] == 'USD'][0]['cb_price']
-        banks = [
-            f"🏛 **MB kursi:** {usd}", "🔹 **NBU:** 12 860 / 12 950", "🔹 **Kapital:** 12 870 / 12 960", 
-            "🔹 **Hamkor:** 12 860 / 12 945", "🔹 **Ipak Yo'li:** 12 880 / 12 960", "🔹 **Agro:** 12 850 / 12 940", 
-            "🔹 **Xalq:** 12 860 / 12 950", "🔹 **Aloqa:** 12 870 / 12 955", "🔹 **Turon:** 12 865 / 12 950", 
-            "🔹 **SQB:** 12 870 / 12 960", "🔹 **Asaka:** 12 860 / 12 950", "🔹 **Orient:** 12 880 / 12 965", 
-            "🔹 **Mikro:** 12 855 / 12 945", "🔹 **Infin:** 12 875 / 12 960"
-        ]
-        return "🏦 **BANKLARDA DOLLAR KURSI (10:30):**\n\n" + "\n".join(banks)
-    except: return "🏦 Kurslar yangilanmoqda..."
 
 # 6. VIKTORINA VA REJA
 def send_random_quiz():
@@ -106,8 +92,9 @@ def send_random_quiz():
     except: pass
 
 def run_scheduler():
-    l_q, = ""
+    l_q = ""
     while True:
+        try:
         now = datetime.now(uzb_tz)
         cur, day = now.strftime("%H:%M"), now.strftime("%Y-%m-%d")
         if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
