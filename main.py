@@ -95,10 +95,10 @@ def run_scheduler():
     l_q = ""
     while True:
         try:
-        now = datetime.now(uzb_tz)
-        cur, day = now.strftime("%H:%M"), now.strftime("%Y-%m-%d")
-        if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
-            send_random_quiz(); l_q = (day + cur) 
+            now = datetime.now(uzb_tz)
+            cur, day = now.strftime("%H:%M"), now.strftime("%Y-%m-%d")
+            if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
+                send_random_quiz(); l_q = (day + cur) 
         time.sleep(30)
 
 # 7. YANGILIKLAR LOOP
