@@ -69,13 +69,12 @@ SOURCES = [
     ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
     ('DW News', 'https://rss.dw.com/xml/rss-en-all'),
     ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), ('TASS', 'https://tass.com/rss/v2.xml'), 
-    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'),
-    ('TechCrunch', 'https://techcrunch.com/feed/'), ('Wired', 'https://www.wired.com/feed/rss'), 
+    ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'), 
     ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
     ('The Economist', 'https://www.economist.com/international/rss.xml'),
     ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), 
     ('Nature', 'https://www.nature.com/nature.rss'), ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'),
-    ('History.com', 'https://www.history.com/.rss/full/all'), ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
+    ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
     ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
 ]
 
