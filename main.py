@@ -100,7 +100,9 @@ def run_scheduler():
             if cur in ["10:00", "15:00","21:00"] and l_q != (day + cur) :
                 send_random_quiz(); l_q = (day + cur) 
         time.sleep(30)
-
+    except Exception as e:
+        print(f"Xatolik: {e}") 
+        time.sleep(10)
 # 7. YANGILIKLAR LOOP
 def start_news_loop():
     conn = sqlite3.connect('karnay_final.db'); c = conn.cursor()
