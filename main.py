@@ -54,7 +54,7 @@ def get_max_caption(title, body, source_name):
 # 4. MANBALAR (TO'LIQ 48 TA)
 SOURCES = [ 
     ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'),
-    ('UzNews.uz', 'https://uznews.uz/uz/rss'), ('AdMe', 'https://www.adme.ru/rss/'),
+    ('UzNews.uz', 'https://uznews.uz/uz/rss'),
     ('Lifehacker', 'https://lifehacker.com/rss'), ('BigThink', 'https://bigthink.com/feed/'),
     ('Digital Trends', 'https://www.digitaltrends.com/feed/'),
     ('Podrobno.uz', 'https://podrobno.uz/rss/all/'), ('Mental Floss', 'https://www.mentalfloss.com/rss.xml'), ('Bright Side', 'https://brightside.me/rss/'),
