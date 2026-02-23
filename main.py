@@ -50,13 +50,12 @@ def get_max_caption(title, body, source_name):
 # 4. MANBALAR (48 TA MANBA RO'YXATI)
 SOURCES = [ 
     ('TASS', 'https://tass.com/rss/v2.xml'),
-    ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'),
+    ('Xabar.uz', 'https://xabar.uz/uz/rss'),
     ('UzNews.uz', 'https://uznews.uz/uz/rss'),
     ('Lifehacker', 'https://lifehacker.com/rss'), ('BigThink', 'https://bigthink.com/feed/'),
     ('Digital Trends', 'https://www.digitaltrends.com/feed/'),
     ('Podrobno.uz', 'https://podrobno.uz/rss/all/'),
     ('Bilasizmi', 'https://www.howstuffworks.com/rss.xml'), ('Faktlar', 'https://www.factslides.com/rss.xml'),
-    ('Sputnik', 'https://uz.sputniknews.ru/export/rss2/archive/index.xml'),
     ('BBC Uzbek', 'https://www.bbc.com/uzbek/index.xml'),
     ('Championat', 'https://www.championat.com/xml/rss/all.xml'),
     ('ESPN Soccer', 'https://www.espn.com/espn/rss/soccer/news'),
