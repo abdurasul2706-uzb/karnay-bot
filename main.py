@@ -4,17 +4,17 @@ import time
 import requests
 import sqlite3
 import random
+import pytz
 from bs4 import BeautifulSoup
 from googletrans import Translator
 from flask import Flask
 from threading import Thread
 from datetime import datetime, timedelta
-import pytz
 
-# 1. SERVER & SETTINGS
+# 1. SERVER & SOZLAMALAR
 app = Flask('')
 @app.route('/')
-def home(): return "Karnay.uzb v10.1 - Max Text & 48 Sources Active 🚀"
+def home(): return "Karnay.uzb v11.0 - AI Translation & 48 Sources Active 🚀"
 def run(): app.run(host='0.0.0.0', port=8080)
 def keep_alive(): Thread(target=run).start()
 
@@ -34,25 +34,22 @@ def is_halal(text):
     text = text.lower()
     return not any(word in text for word in HAROM_WORDS)
 
-# 3. MAKSIMAL MATN TAYYORLASH (Limit: 980 belgi)
+# 3. MATN TAYYORLASH (Limit: 980 belgi)
 def get_max_caption(title, body, source_name):
     prefix = f"📢 **KARNAY.UZB**\n\n⚡️ **{title.upper()}**\n\n"
     suffix = f"\n\n🔗 **Manba:** {source_name}\n✅ @karnayuzb\n\n{STANDARD_FINISH}"
-    
-    # Telegram 1024 belgi ruxsat beradi, biz 980 da to'xtaymiz (xavfsizlik uchun)
     allowed_body_len = 980 - len(prefix) - len(suffix)
     
     if len(body) > allowed_body_len:
         body = body[:allowed_body_len]
-        # Matnni chala qoldirmay, oxirgi nuqtadan kesish
         last_punc = max(body.rfind('.'), body.rfind('!'), body.rfind('?'))
         if last_punc > (allowed_body_len * 0.7):
             body = body[:last_punc+1]
-            
     return f"{prefix}{body}{suffix}"
 
-# 4. MANBALAR (TO'LIQ 48 TA)
+# 4. MANBALAR (48 TA MANBA RO'YXATI)
 SOURCES = [ 
+    ('TASS', 'https://tass.com/rss/v2.xml'),
     ('Gazeta.uz', 'https://www.gazeta.uz/uz/rss/'), ('Xabar.uz', 'https://xabar.uz/uz/rss'),
     ('UzNews.uz', 'https://uznews.uz/uz/rss'),
     ('Lifehacker', 'https://lifehacker.com/rss'), ('BigThink', 'https://bigthink.com/feed/'),
@@ -68,55 +65,85 @@ SOURCES = [
     ('The Guardian', 'https://www.theguardian.com/world/rss'), ('Reuters', 'https://www.reutersagency.com/feed/?best-topics=world-news&post_type=best'), 
     ('Al Jazeera', 'https://www.aljazeera.com/xml/rss/all.xml'),
     ('DW News', 'https://rss.dw.com/xml/rss-en-all'),
-    ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), ('TASS', 'https://tass.com/rss/v2.xml'), 
+    ('ABC News', 'https://abcnews.go.com/abcnews/internationalheadlines'), 
     ('RIA Novosti', 'https://ria.ru/export/rss2/world/index.xml'), 
-    ('Marca', 'https://e00-marca.uecdn.es/rss/en/index.xml'), ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
+    ('Championat.asia', 'https://championat.asia/uz/news/rss'), 
     ('The Economist', 'https://www.economist.com/international/rss.xml'),
     ('Bloomberg', 'https://www.bloomberg.com/politics/feeds/site.xml'), ('NASA News', 'https://www.nasa.gov/rss/dyn/breaking_news.rss'), 
     ('Nature', 'https://www.nature.com/nature.rss'), ('ScienceDaily', 'https://www.sciencedaily.com/rss/all.xml'),
     ('National Geographic', 'https://www.nationalgeographic.com/rss/index.html'),
-    ('Rolling Stone', 'https://www.rollingstone.com/feed/'),
 ]
 
+# 5. BAZANI INITIALIZATSIYA QILISH
+def init_db():
+    conn = sqlite3.connect('karnay_final.db')
+    c = conn.cursor()
+    c.execute('CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)')
+    conn.commit()
+    conn.close()
 
-
-# 7. YANGILIKLAR LOOP
+# 6. ASOSIY YANGILIKLAR LOOP
 def start_news_loop():
-    conn = sqlite3.connect('karnay_final.db'); c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS news (link TEXT PRIMARY KEY)'); conn.close()
+    init_db()
     while True:
-        shf = list(SOURCES); random.shuffle(shf)
+        shf = list(SOURCES)
+        random.shuffle(shf)
         for name, url in shf:
             try:
                 feed = feedparser.parse(url)
                 for entry in feed.entries[:5]:
+                    # Vaqtni tekshirish (oxirgi 24 soat)
                     pub_t = entry.get('published_parsed') or entry.get('updated_parsed')
                     if pub_t:
-                        if datetime.now(pytz.utc) - datetime.fromtimestamp(time.mktime(pub_t), pytz.utc) > timedelta(hours=24): continue
+                        if datetime.now(pytz.utc) - datetime.fromtimestamp(time.mktime(pub_t), pytz.utc) > timedelta(hours=24):
+                            continue
                     
-                    conn = sqlite3.connect('karnay_final.db'); cur = conn.cursor()
+                    # Bazada borligini tekshirish
+                    conn = sqlite3.connect('karnay_final.db')
+                    cur = conn.cursor()
                     cur.execute("SELECT * FROM news WHERE link=?", (entry.link,))
-                    if cur.fetchone(): conn.close(); continue
+                    if cur.fetchone():
+                        conn.close()
+                        continue
                     
+                    # Saytdan kontent va rasm olish
                     r = requests.get(entry.link, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
                     soup = BeautifulSoup(r.content, 'html.parser')
+                    
+                    # Rasm qidirish
                     img = soup.find("meta", property="og:image")
                     img_url = img['content'] if img else CHANNEL_LOGO
                     
-                    text = " ".join([p.get_text() for p in soup.find_all('p') if len(p.get_text()) > 40])
-                    if not is_halal(entry.title + text): conn.close(); continue
+                    # Matn yig'ish
+                    paragraphs = [p.get_text() for p in soup.find_all('p') if len(p.get_text()) > 40]
+                    full_text = " ".join(paragraphs[:5]) # Dastlabki 5 ta paragraf
                     
-                    t_uz = translator.translate(entry.title, dest='uz').text
-                    b_uz = translator.translate(text[:1200], dest='uz').text 
+                    if not is_halal(entry.title + full_text):
+                        conn.close()
+                        continue
                     
+                    # Tarjima qilish (agar inglizcha bo'lsa)
+                    try:
+                        t_uz = translator.translate(entry.title, dest='uz').text
+                        b_uz = translator.translate(full_text[:1000], dest='uz').text
+                    except:
+                        t_uz = entry.title
+                        b_uz = full_text[:500]
+                    
+                    # Kanalga yuborish
                     bot.send_photo(CHANNEL_ID, img_url, caption=get_max_caption(t_uz, b_uz, name), parse_mode='Markdown')
+                    
+                    # Bazaga yozish
                     cur.execute("INSERT INTO news VALUES (?)", (entry.link,))
-                    conn.commit(); conn.close()
-                    time.sleep(180)
-            except: continue
-        time.sleep(300)
+                    conn.commit()
+                    conn.close()
+                    time.sleep(180) # Har bir post orasida 3 daqiqa farq
+            except Exception as e:
+                print(f"Xato yuz berdi ({name}): {e}")
+                continue
+        time.sleep(300) # Manbalar ro'yxati tugagach 5 daqiqa kutish
 
 if __name__ == "__main__":
     keep_alive()
-    Thread(target=run_scheduler).start()
+    # Yangiliklar loopini asosiy oqimda ishga tushiramiz
     start_news_loop()
